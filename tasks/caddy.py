@@ -21,6 +21,12 @@ CADDYFILE_PATH = "/etc/caddy/Caddyfile"
 
 # --- Caddyfile ---
 
+# Ollama applies an anti-DNS-rebinding check: when bound to 127.0.0.1:PORT it
+# only accepts requests whose Host header matches that exact upstream. Caddy
+# must rewrite Host on the way through, otherwise external hostnames
+# (e.g. ai.anarkisti.com via raspi Traefik) get a 403 from ollama.
+_upstream = f"127.0.0.1:{OLLAMA['internal_port']}"
+
 if OLLAMA.get("require_api_key"):
     # Bearer-gated: the @authed matcher only matches when the request header
     # is exactly `Bearer <token>`. Anything else falls through to the 401.
@@ -32,7 +38,9 @@ if OLLAMA.get("require_api_key"):
 :{OLLAMA["port"]} {{
     @authed header Authorization "Bearer {{env.OLLAMA_API_KEY}}"
     handle @authed {{
-        reverse_proxy 127.0.0.1:{OLLAMA["internal_port"]}
+        reverse_proxy {_upstream} {{
+            header_up Host {{upstream_hostport}}
+        }}
     }}
     respond "unauthorized" 401
     log {{
@@ -47,7 +55,9 @@ else:
 }}
 
 :{OLLAMA["port"]} {{
-    reverse_proxy 127.0.0.1:{OLLAMA["internal_port"]}
+    reverse_proxy {_upstream} {{
+        header_up Host {{upstream_hostport}}
+    }}
     log {{
         output file /opt/homebrew/var/log/caddy/access.log
     }}
