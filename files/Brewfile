@@ -1,0 +1,18 @@
+# Base CLI tools deployed by tasks/bootstrap.py.
+# Edit and re-run the deploy to add/remove tools.
+
+brew "fish"
+brew "git"
+brew "curl"
+brew "wget"
+brew "htop"
+brew "jq"
+brew "ripgrep"
+brew "fd"
+brew "tmux"
+brew "vim"
+
+# Service binaries — pinned by their own tasks/*.py for version control.
+# Listed here so brew tracks them; the launchd plist owns lifecycle.
+brew "caddy"
+brew "ollama"

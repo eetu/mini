@@ -1,0 +1,34 @@
+[project]
+name = "mini"
+version = "0.1.0"
+description = "Agentless IaC for a Mac mini M4 Pro running ollama as a LAN OpenAI-compatible LLM endpoint."
+requires-python = ">=3.13"
+dependencies = [
+    "pyinfra>=3.7",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long — ruff format handles this
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vault", "group_data"]
