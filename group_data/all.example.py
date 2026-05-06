@@ -70,3 +70,9 @@ BESZEL = {
     #     the raspi project does NOT do by default).
     "hub_url": "https://metrics.example.com",
 }
+
+# Apple Screen Sharing (VNC on 5900). True bootstraps + enables the
+# com.apple.screensharing LaunchDaemon. False (or omitted) tears it down and
+# disables it across reboots. pf's LAN+WG perimeter already gates 5900 — no
+# extra firewall rule needed. Connect via Finder > Cmd+K > vnc://<lan_ip>.
+SCREEN_SHARING = False
