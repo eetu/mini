@@ -11,6 +11,7 @@ brew "ripgrep"
 brew "fd"
 brew "tmux"
 brew "vim"
+brew "zoxide"
 
 # Service binaries — pinned by their own tasks/*.py for version control.
 # Listed here so brew tracks them; the launchd plist owns lifecycle.
