@@ -5,11 +5,12 @@ Only runs when a service has its `require_*` flag enabled. Empty deploys
 """
 
 import io
+import shlex
 
 from pyinfra.operations import files
 
 import vault as bw
-from group_data.all import OLLAMA
+from group_data.all import BESZEL, OLLAMA
 
 
 def _put_secret(name, content, dest, mode="600", group="wheel"):
@@ -44,5 +45,27 @@ else:
     files.file(
         name="Remove /etc/secrets/ollama.env (auth disabled)",
         path="/etc/secrets/ollama.env",
+        present=False,
+    )
+
+# --- Beszel agent TOKEN + KEY (synced from BW on every deploy) ---
+
+if BESZEL.get("enabled"):
+    _bz = bw.beszel_agent_creds()
+    # Shell-quote both values: KEY is `ssh-ed25519 AAAA...` with a space, which
+    # the wrapper's POSIX `.` loader would otherwise parse as
+    # `KEY=ssh-ed25519` plus a command `AAAA...`. systemd's EnvironmentFile
+    # parses raw, so the raspi side gets away without quoting.
+    _bz_token = shlex.quote(_bz["token"])
+    _bz_key = shlex.quote(_bz["key"])
+    _put_secret(
+        "beszel-agent.env",
+        f"TOKEN={_bz_token}\nKEY={_bz_key}\n",
+        "/etc/secrets/beszel-agent.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/beszel-agent.env (beszel disabled)",
+        path="/etc/secrets/beszel-agent.env",
         present=False,
     )

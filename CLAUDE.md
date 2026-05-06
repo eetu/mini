@@ -5,7 +5,7 @@ Agentless infrastructure-as-code for a Mac mini M4 Pro (24 GB) running ollama as
 ## Deploy
 
 ```fish
-set -x BW_SESSION (bw unlock --raw)   # only required when OLLAMA["require_api_key"] is True
+set -x BW_SESSION (bw unlock --raw)   # required when OLLAMA["require_api_key"] or BESZEL["enabled"] is True
 uv run pyinfra inventory.py deploy.py
 ```
 
@@ -61,6 +61,7 @@ ai.<domain> ─►  raspi Traefik (TLS termination)  ─►  http://192.168.1.15
 - **Ollama** binds to `127.0.0.1:{internal_port}` — never reachable except through Caddy.
 - **pf** restricts inbound 22/11434 to `lan_cidr` + `wg_subnet`.
 - **Pi-side** (separate repo) handles `ai.<domain>` DNS + Traefik routing + TLS — no work on the Mini for that.
+- **Beszel agent** (optional, `BESZEL["enabled"]`) — native LaunchDaemon dialing the raspi hub via WebSocket using `BESZEL["hub_url"]` + a TOKEN/KEY pair from BW. No inbound port; nothing for pf to allow.
 
 ## Secrets handling — AI assistants read this
 
@@ -101,6 +102,10 @@ uv run pyinfra inventory.py tasks/secrets.py tasks/caddy.py
 ### Enabling / disabling auth
 
 Flip `OLLAMA["require_api_key"]` in `group_data/all.py`, then redeploy. Going from True → False removes `/etc/secrets/ollama.env` and switches the Caddyfile to a transparent reverse proxy. False → True requires the BW item to exist with `api_key` populated, or `vault.ollama_api_key()` raises before any file is written.
+
+### Enabling / disabling the Beszel agent
+
+Flip `BESZEL["enabled"]` in `group_data/all.py`, then redeploy. False → True needs BW item `mini/beszel-agent` populated with hidden fields `token` (universal token) and `key` (hub ed25519 pubkey) — both copied from the running raspi (hub UI Add System dialog, or `/etc/secrets/beszel-agent.env` on the raspi). True → False boots the daemon out and removes the binary, wrapper, plist, stamp, and env file.
 
 ## Ports in use
 

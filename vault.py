@@ -3,11 +3,16 @@ Bitwarden CLI helpers. Requires BW_SESSION env var to be set:
     set -x BW_SESSION (bw unlock --raw)
 
 Item structure in the 'mini' folder:
-  ollama  login  (unused)  fields: api_key (hidden, generated locally and stored in BW)
+  ollama         login (unused)  fields: api_key (hidden)
+  beszel-agent   login (unused)  fields: token (hidden), key (hidden)
 
 The `ollama` item is only required when OLLAMA["require_api_key"] is True.
 Generate the token once with `openssl rand -hex 32` and paste it as the `api_key`
 hidden field on the Bitwarden item before deploying with the flag enabled.
+
+The `beszel-agent` item is required whenever tasks/beszel.py is in deploy.py.
+Copy `token` and `key` from the running raspi hub — either from the Add System
+dialog in the hub UI, or from `/etc/secrets/beszel-agent.env` on the raspi.
 """
 
 import functools
@@ -66,3 +71,25 @@ def ollama_api_key() -> str:
             "Then add it to the BW item before re-running the deploy."
         )
     return key
+
+
+def beszel_agent_creds() -> dict:
+    """Return TOKEN + KEY for the beszel agent from the `beszel-agent` BW item.
+
+    Raises if either field is missing. Both come from the raspi hub:
+      token — universal-token from the hub (hub UI > Add System, or
+              /etc/secrets/beszel-agent.env on the raspi).
+      key   — hub ed25519 public key (same source).
+    """
+    f = _fields("beszel-agent")
+    token = f.get("token", "") or ""
+    key = f.get("key", "") or ""
+    missing = [n for n, v in (("token", token), ("key", key)) if not v]
+    if missing:
+        raise RuntimeError(
+            "Bitwarden item 'mini/beszel-agent' missing hidden field(s): "
+            f"{', '.join(missing)}.\n"
+            "Copy them from the raspi hub UI (Add System) or from\n"
+            "/etc/secrets/beszel-agent.env on the raspi, then re-run the deploy."
+        )
+    return {"token": token, "key": key}

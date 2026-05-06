@@ -51,3 +51,22 @@ OLLAMA = {
 CADDY = {
     "version": "2",  # tracks the Homebrew major; pin if you want exact reproducibility
 }
+
+# Beszel agent — outbound monitoring agent that dials the raspi hub.
+# When enabled, requires the BW item `mini/beszel-agent` with hidden fields
+# `token` (universal token from the hub) and `key` (hub ed25519 public key).
+# Both copy from the running raspi: hub UI > Add System, or
+# /etc/secrets/beszel-agent.env on the raspi.
+BESZEL = {
+    "enabled": False,
+    # Pin the agent binary to the same major as the raspi hub. Mismatched
+    # major versions can break the WS protocol. Releases:
+    # https://github.com/henrygd/beszel/releases
+    "version": "v0.18.7",
+    # Where the agent dials the hub. The raspi hub binds to 127.0.0.1 only,
+    # so this must be a network-reachable address. Pick one:
+    #   - Through the raspi Traefik route (TLS): "https://metrics.<your-domain>"
+    #   - Direct to raspi LAN IP (only if you expose the hub on the LAN, which
+    #     the raspi project does NOT do by default).
+    "hub_url": "https://metrics.example.com",
+}
