@@ -25,6 +25,11 @@ CADDYFILE_PATH = "/etc/caddy/Caddyfile"
 # only accepts requests whose Host header matches that exact upstream. Caddy
 # must rewrite Host on the way through, otherwise external hostnames
 # (e.g. ai.anarkisti.com via raspi Traefik) get a 403 from ollama.
+#
+# flush_interval -1 disables response body buffering so SSE/streaming
+# generations (chat tokens, image-gen progress) reach the client as ollama
+# emits them. Without it, Caddy buffers chunks and long jobs can hit
+# upstream/downstream idle timeouts before the first byte makes it through.
 _upstream = f"127.0.0.1:{OLLAMA['internal_port']}"
 
 if OLLAMA.get("require_api_key"):
@@ -40,6 +45,7 @@ if OLLAMA.get("require_api_key"):
     handle @authed {{
         reverse_proxy {_upstream} {{
             header_up Host {{upstream_hostport}}
+            flush_interval -1
         }}
     }}
     respond "unauthorized" 401
@@ -57,6 +63,7 @@ else:
 :{OLLAMA["port"]} {{
     reverse_proxy {_upstream} {{
         header_up Host {{upstream_hostport}}
+        flush_interval -1
     }}
     log {{
         output file /opt/homebrew/var/log/caddy/access.log
