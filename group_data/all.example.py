@@ -25,6 +25,12 @@ BREW = {
 }
 
 OLLAMA = {
+    # Pin the Ollama.app version downloaded from GitHub releases. The official
+    # .app bundles parts of the image-gen runtime that the Homebrew formula
+    # omits; we install via tasks/ollama.py from
+    # https://github.com/ollama/ollama/releases/<version>/Ollama-darwin.zip
+    # and point the LaunchDaemon at the embedded server binary.
+    "version": "v0.22.0",
     # Caddy listens on `port` (LAN-facing); ollama listens on `internal_port` (127.0.0.1 only).
     "port": 11434,
     "internal_port": 11435,
@@ -32,14 +38,23 @@ OLLAMA = {
     # Token comes from the `ollama` Bitwarden item, field `api_key`.
     # When False, Caddy is a transparent reverse proxy — no auth, LAN trust only.
     "require_api_key": False,
-    # Models to pull at deploy time. See https://ollama.com/library/gemma4/tags
+    # Models pulled at deploy time. See https://ollama.com/library/gemma4/tags
     # for sizes — `gemma4:26b` (18 GB, q4_K_M default) is the recommended daily
     # driver on 24 GB unified memory. Tag bare size variants (`26b`, `e4b`); only
     # append a quantization suffix (`-q8_0`, `-bf16`, …) when overriding the default.
+    #
+    # When `prune_unlisted` is True this list is the SOURCE OF TRUTH — any model
+    # present on the box but not in this list is removed on the next deploy.
+    # Drop a name here to delete it. Manual `ollama pull` of test models will
+    # also be wiped — pin them here if you want them to survive.
     "models": [
         "gemma4:26b",
         "gemma4:e4b",
     ],
+    # Strict declarative mode for the model set. False (default) leaves
+    # ad-hoc-pulled models in place. True turns the deploy into a reconciler
+    # that removes anything not listed above.
+    "prune_unlisted": False,
     # How long ollama keeps a model resident in RAM after the last request.
     # 15m frees memory between coding sessions; bump if you find yourself waiting through reloads.
     # Per-request override: include `"keep_alive": "1h"` (or `0`) in the JSON body.

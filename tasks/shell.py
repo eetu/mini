@@ -44,3 +44,15 @@ if _user and "fish" in SHELL:
         line="command -q zoxide; and zoxide init fish | source",
         present=True,
     )
+
+    # Fish doesn't source /etc/profile, so the macOS path_helper that builds
+    # PATH from /etc/paths + /etc/paths.d/* never runs. Without this, things
+    # symlinked into /usr/local/bin (e.g. the Ollama CLI from Ollama.app)
+    # don't resolve in non-interactive ssh shells. fish_add_path is idempotent
+    # and persists via the fish_user_paths universal variable.
+    files.line(
+        name="Add /usr/local/bin to fish PATH",
+        path=f"{_home}/.config/fish/config.fish",
+        line="fish_add_path -gP /usr/local/bin",
+        present=True,
+    )

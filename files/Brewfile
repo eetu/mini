@@ -16,4 +16,7 @@ brew "zoxide"
 # Service binaries — pinned by their own tasks/*.py for version control.
 # Listed here so brew tracks them; the launchd plist owns lifecycle.
 brew "caddy"
-brew "ollama"
+# Ollama is intentionally NOT brew — Homebrew builds ship without parts of the
+# image-gen runtime that the official Ollama.app bundles. tasks/ollama.py
+# downloads the Ollama-darwin.zip release from GitHub and points the
+# LaunchDaemon at /Applications/Ollama.app/Contents/Resources/ollama.
