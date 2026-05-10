@@ -4,11 +4,13 @@ Bitwarden CLI helpers. Requires BW_SESSION env var to be set:
 
 Item structure in the 'mini' folder:
   ollama         login (unused)  fields: api_key (hidden)
+  comfyui        login (unused)  fields: api_key (hidden)
   beszel-agent   login (unused)  fields: token (hidden), key (hidden)
 
-The `ollama` item is only required when OLLAMA["require_api_key"] is True.
-Generate the token once with `openssl rand -hex 32` and paste it as the `api_key`
-hidden field on the Bitwarden item before deploying with the flag enabled.
+The `ollama` and `comfyui` items are only required when their respective
+`require_api_key` flag is True. Generate each token once with
+`openssl rand -hex 32` and paste it as the `api_key` hidden field on the
+Bitwarden item before deploying with the flag enabled.
 
 The `beszel-agent` item is required whenever tasks/beszel.py is in deploy.py.
 Copy `token` and `key` from the running raspi hub — either from the Add System
@@ -67,6 +69,23 @@ def ollama_api_key() -> str:
     if not key:
         raise RuntimeError(
             "Bitwarden item 'mini/ollama' missing hidden field 'api_key'.\n"
+            "Generate one: openssl rand -hex 32\n"
+            "Then add it to the BW item before re-running the deploy."
+        )
+    return key
+
+
+def comfyui_api_key() -> str:
+    """Return the ComfyUI bearer token from the `comfyui` BW item.
+
+    Raises if the item or field is missing — only call when
+    COMFYUI["require_api_key"] is True so the deploy fails fast with a clear
+    error before writing a half-configured Caddyfile.
+    """
+    key = _fields("comfyui").get("api_key", "") or ""
+    if not key:
+        raise RuntimeError(
+            "Bitwarden item 'mini/comfyui' missing hidden field 'api_key'.\n"
             "Generate one: openssl rand -hex 32\n"
             "Then add it to the BW item before re-running the deploy."
         )

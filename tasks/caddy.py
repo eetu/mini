@@ -1,8 +1,9 @@
-"""Caddy as the LAN-facing gateway in front of ollama.
+"""Caddy as the LAN-facing gateway in front of ollama and ComfyUI.
 
 Always installed — provides a stable indirection layer regardless of whether
-auth is enforced. When OLLAMA["require_api_key"] is True, Caddy gates every
-request on `Authorization: Bearer $OLLAMA_API_KEY`. Otherwise it's a
+auth is enforced. Each upstream gets its own `:port` site block. When the
+service's `require_api_key` flag is True, Caddy gates every request on
+`Authorization: Bearer $<SERVICE>_API_KEY`. Otherwise the block is a
 transparent reverse proxy and the LAN+pf perimeter is the only trust boundary.
 """
 
@@ -11,7 +12,7 @@ import io
 
 from pyinfra.operations import files, server
 
-from group_data.all import OLLAMA
+from group_data.all import COMFYUI, OLLAMA
 from tasks.util import kickstart_if_changed
 
 LABEL = "com.eetu.caddy"
@@ -19,31 +20,28 @@ PLIST_PATH = f"/Library/LaunchDaemons/{LABEL}.plist"
 WRAPPER_PATH = "/usr/local/bin/caddy-run.sh"
 CADDYFILE_PATH = "/etc/caddy/Caddyfile"
 
-# --- Caddyfile ---
-
+# --- Caddyfile site blocks ---
+#
 # Ollama applies an anti-DNS-rebinding check: when bound to 127.0.0.1:PORT it
 # only accepts requests whose Host header matches that exact upstream. Caddy
 # must rewrite Host on the way through, otherwise external hostnames
-# (e.g. ai.anarkisti.com via raspi Traefik) get a 403 from ollama.
+# (e.g. ai.anarkisti.com via raspi Traefik) get a 403 from ollama. ComfyUI
+# doesn't share that quirk but the same rewrite is harmless.
 #
-# flush_interval -1 disables response body buffering so SSE/streaming
-# generations (chat tokens, image-gen progress) reach the client as ollama
-# emits them. Without it, Caddy buffers chunks and long jobs can hit
-# upstream/downstream idle timeouts before the first byte makes it through.
-_upstream = f"127.0.0.1:{OLLAMA['internal_port']}"
+# flush_interval -1 disables response body buffering so streaming responses
+# (ollama SSE chat tokens, ComfyUI websocket-fallback progress) reach the
+# client as the upstream emits them. Without it, Caddy buffers chunks and
+# long jobs can hit upstream/downstream idle timeouts before the first byte
+# makes it through.
 
-if OLLAMA.get("require_api_key"):
-    # Bearer-gated: the @authed matcher only matches when the request header
-    # is exactly `Bearer <token>`. Anything else falls through to the 401.
-    _caddyfile = f"""{{
-    admin off
-    auto_https off
-}}
 
-:{OLLAMA["port"]} {{
-    @authed header Authorization "Bearer {{env.OLLAMA_API_KEY}}"
+def _site_block(port, upstream_port, env_var, require_api_key):
+    upstream = f"127.0.0.1:{upstream_port}"
+    if require_api_key:
+        return f""":{port} {{
+    @authed header Authorization "Bearer {{env.{env_var}}}"
     handle @authed {{
-        reverse_proxy {_upstream} {{
+        reverse_proxy {upstream} {{
             header_up Host {{upstream_hostport}}
             flush_interval -1
         }}
@@ -54,14 +52,8 @@ if OLLAMA.get("require_api_key"):
     }}
 }}
 """
-else:
-    _caddyfile = f"""{{
-    admin off
-    auto_https off
-}}
-
-:{OLLAMA["port"]} {{
-    reverse_proxy {_upstream} {{
+    return f""":{port} {{
+    reverse_proxy {upstream} {{
         header_up Host {{upstream_hostport}}
         flush_interval -1
     }}
@@ -71,17 +63,38 @@ else:
 }}
 """
 
+
+_caddyfile = (
+    "{\n    admin off\n    auto_https off\n}\n\n"
+    + _site_block(
+        OLLAMA["port"],
+        OLLAMA["internal_port"],
+        "OLLAMA_API_KEY",
+        OLLAMA.get("require_api_key", False),
+    )
+    + "\n"
+    + _site_block(
+        COMFYUI["port"],
+        COMFYUI["internal_port"],
+        "COMFYUI_API_KEY",
+        COMFYUI.get("require_api_key", False),
+    )
+)
+
 # --- Wrapper script ---
-# Sources /etc/secrets/ollama.env when present so {env.OLLAMA_API_KEY} in the
-# Caddyfile resolves at startup. Rotating the secret only requires
-# re-running tasks/secrets.py + tasks/caddy.py — the env-file hash trips
-# kickstart_if_changed below.
+# Sources both /etc/secrets/<service>.env files when present so
+# {env.<SERVICE>_API_KEY} placeholders in the Caddyfile resolve at startup.
+# Rotating either secret only requires re-running tasks/secrets.py +
+# tasks/caddy.py — the env-file hashes trip kickstart_if_changed below.
 _wrapper = """#!/bin/sh
 set -e
-if [ -f /etc/secrets/ollama.env ]; then
-  . /etc/secrets/ollama.env
-  export OLLAMA_API_KEY
-fi
+for f in /etc/secrets/ollama.env /etc/secrets/comfyui.env; do
+  if [ -f "$f" ]; then
+    set -a
+    . "$f"
+    set +a
+  fi
+done
 exec /opt/homebrew/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 """
 
@@ -158,7 +171,14 @@ _static_hash = hashlib.sha256(
     (_caddyfile + _wrapper + _plist).encode(),
 ).hexdigest()
 
-_env_files = ("/etc/secrets/ollama.env",) if OLLAMA.get("require_api_key") else ()
+_env_files = tuple(
+    path
+    for path, present in (
+        ("/etc/secrets/ollama.env", OLLAMA.get("require_api_key")),
+        ("/etc/secrets/comfyui.env", COMFYUI.get("require_api_key")),
+    )
+    if present
+)
 
 server.shell(
     name="Bootstrap caddy + kickstart on change",

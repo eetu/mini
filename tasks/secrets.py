@@ -10,7 +10,7 @@ import shlex
 from pyinfra.operations import files
 
 import vault as bw
-from group_data.all import BESZEL, OLLAMA
+from group_data.all import BESZEL, COMFYUI, OLLAMA
 
 
 def _put_secret(name, content, dest, mode="600", group="wheel"):
@@ -45,6 +45,21 @@ else:
     files.file(
         name="Remove /etc/secrets/ollama.env (auth disabled)",
         path="/etc/secrets/ollama.env",
+        present=False,
+    )
+
+# --- ComfyUI API key (only when auth is enabled) ---
+
+if COMFYUI.get("require_api_key"):
+    _put_secret(
+        "comfyui.env",
+        f"COMFYUI_API_KEY={bw.comfyui_api_key()}\n",
+        "/etc/secrets/comfyui.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/comfyui.env (auth disabled)",
+        path="/etc/secrets/comfyui.env",
         present=False,
     )
 

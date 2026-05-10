@@ -67,6 +67,36 @@ CADDY = {
     "version": "2",  # tracks the Homebrew major; pin if you want exact reproducibility
 }
 
+# ComfyUI — opinionated img2img stack built around Flux.1 Kontext [dev] FP8.
+# tasks/comfyui.py installs ComfyUI from the GitHub source tarball for
+# COMFYUI["version"] into /Applications/ComfyUI/, builds a `.venv` via `uv`
+# from requirements.txt, and pulls a fixed set of weights for Flux Kontext
+# img2img: the FP8 diffusion model, T5-XXL + CLIP-L text encoders, and the
+# Flux VAE. Model URLs and target subdirs live in tasks/comfyui.py — not here
+# — because the stack is intentionally not user-configurable. The
+# LaunchDaemon runs `.venv/bin/python main.py` bound to 127.0.0.1, and Caddy
+# gates the LAN-facing port the same way it does ollama.
+#
+# Memory: Flux Kontext FP8 needs ~12 GB resident; loading alongside Gemma 26B
+# (~18 GB) will OOM. The calling app is expected to coordinate eviction —
+# send `"keep_alive": 0` to ollama before invoking ComfyUI, or rely on a short
+# OLLAMA["keep_alive"]. ComfyUI keeps the checkpoint in RAM until process exit.
+COMFYUI = {
+    # Pin a ComfyUI git tag — the deploy downloads
+    # https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/<version>.tar.gz
+    # and extracts to /Applications/ComfyUI. Bumping this wipes the existing
+    # install directory (incl. .venv) and reinstalls. Models live outside
+    # the install dir and survive version bumps.
+    "version": "v0.20.1",
+    # Caddy listens on `port` (LAN-facing); ComfyUI listens on `internal_port` (127.0.0.1 only).
+    "port": 8188,
+    "internal_port": 8189,
+    # When True, Caddy enforces `Authorization: Bearer $COMFYUI_API_KEY` on every request.
+    # Token comes from the `comfyui` Bitwarden item, field `api_key`.
+    # When False, Caddy is a transparent reverse proxy — no auth, LAN trust only.
+    "require_api_key": False,
+}
+
 # Beszel agent — outbound monitoring agent that dials the raspi hub.
 # When enabled, requires the BW item `mini/beszel-agent` with hidden fields
 # `token` (universal token from the hub) and `key` (hub ed25519 public key).
