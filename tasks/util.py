@@ -32,11 +32,12 @@ def kickstart_if_changed(
     # call bootstrap immediately, it can race the unload and silently leave
     # the daemon in "not loaded" state — fine on disk, gone in memory. Poll
     # `launchctl print` until it fails (= job actually unloaded), then
-    # bootstrap. Cap the wait at ~10s; long enough for ollama-sized binaries
-    # without dragging out a deploy if launchctl is wedged.
+    # bootstrap. Cap the wait at ~30s: ollama unloading an 18 GB resident
+    # model on bootout can take 10–15s on its own, and we'd rather wait than
+    # double-bootstrap a half-torn-down job.
     reload_block = (
         f"launchctl bootout system/{label} >/dev/null 2>&1 || true\n"
-        f"  for _ in $(seq 1 20); do\n"
+        f"  for _ in $(seq 1 60); do\n"
         f"    launchctl print system/{label} >/dev/null 2>&1 || break\n"
         f"    sleep 0.5\n"
         f"  done\n"

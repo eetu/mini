@@ -50,6 +50,10 @@ OLLAMA = {
     "models": [
         "gemma4:26b",
         "gemma4:e4b",
+        # Embedding model for RAG / semantic search via /api/embeddings.
+        # 137M params, ~270 MB on disk, negligible RAM compared to the chat
+        # models. Add to keep RAG pipelines on the same endpoint as chat.
+        "nomic-embed-text",
     ],
     # Strict declarative mode for the model set. False (default) leaves
     # ad-hoc-pulled models in place. True turns the deploy into a reconciler

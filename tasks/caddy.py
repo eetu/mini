@@ -33,6 +33,27 @@ CADDYFILE_PATH = "/etc/caddy/Caddyfile"
 # client as the upstream emits them. Without it, Caddy buffers chunks and
 # long jobs can hit upstream/downstream idle timeouts before the first byte
 # makes it through.
+#
+# X-Forwarded-For is added so upstream logs (ollama.log, comfyui.log) record
+# the originating LAN client, not 127.0.0.1. Caddy's own access log already
+# has the client IP via `remote_ip`.
+#
+# Access log uses Caddy's built-in roller (roll_size + roll_keep) so it never
+# needs newsyslog / external rotation. Stdout/stderr from the wrapper go to
+# launchd-captured files which tasks/logrotate.py handles separately.
+
+
+_PROXY_DIRECTIVES = """\
+header_up Host {upstream_hostport}
+header_up X-Forwarded-For {client_ip}
+flush_interval -1"""
+
+_LOG_DIRECTIVE = """\
+output file /opt/homebrew/var/log/caddy/access.log {
+        roll_size 10MiB
+        roll_keep 7
+        roll_keep_for 720h
+    }"""
 
 
 def _site_block(port, upstream_port, env_var, require_api_key):
@@ -42,23 +63,21 @@ def _site_block(port, upstream_port, env_var, require_api_key):
     @authed header Authorization "Bearer {{env.{env_var}}}"
     handle @authed {{
         reverse_proxy {upstream} {{
-            header_up Host {{upstream_hostport}}
-            flush_interval -1
+            {_PROXY_DIRECTIVES.replace(chr(10), chr(10) + "            ")}
         }}
     }}
     respond "unauthorized" 401
     log {{
-        output file /opt/homebrew/var/log/caddy/access.log
+        {_LOG_DIRECTIVE}
     }}
 }}
 """
     return f""":{port} {{
     reverse_proxy {upstream} {{
-        header_up Host {{upstream_hostport}}
-        flush_interval -1
+        {_PROXY_DIRECTIVES.replace(chr(10), chr(10) + "        ")}
     }}
     log {{
-        output file /opt/homebrew/var/log/caddy/access.log
+        {_LOG_DIRECTIVE}
     }}
 }}
 """
