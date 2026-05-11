@@ -1,7 +1,9 @@
 # mini
 
-Agentless IaC for a Mac mini M4 Pro (24 GB) running ollama (chat LLM) and
-ComfyUI (Flux Kontext img2img) as LAN-facing endpoints. Sibling to `../raspi`.
+Agentless IaC for a Mac mini M4 Pro (24 GB) running a small constellation of
+local AI services as LAN-facing endpoints: chat LLMs (Ollama), img2img
+(ComfyUI / Flux Kontext), speech-to-text (Whisper.cpp), and text-to-speech
+(Piper). Sibling to `../raspi`.
 
 ## What it does
 
@@ -9,19 +11,46 @@ ComfyUI (Flux Kontext img2img) as LAN-facing endpoints. Sibling to `../raspi`.
 - pf firewall: trust LAN + raspi WireGuard subnet, default-deny elsewhere.
 - pmset: never sleep, wake on LAN, auto-restart after AC loss.
 - Automatic macOS + App Store updates, daily background check.
-- Homebrew + base CLI tools (`fish`, `git`, `htop`, `ripgrep`, `uv`, …) from `files/Brewfile`.
+- Homebrew + base CLI tools (`fish`, `git`, `htop`, `ripgrep`, `uv`, `cmake`, …) from `files/Brewfile`.
 - Fish shell + zoxide wiring.
-- Caddy: LAN-facing gateway in front of ollama (`:11434`) and ComfyUI (`:8188`).
-  Optional bearer-token auth per service. Access log auto-rotates via
-  `roll_size`/`roll_keep`.
+- Caddy: LAN-facing gateway in front of every upstream, iterating over a
+  `SERVICES` tuple. Optional bearer-token auth per service. Access log
+  auto-rotates via `roll_size`/`roll_keep`. Adds `X-Forwarded-For` upstream.
 - Ollama: official `Ollama.app` binary (not Homebrew), bound to `127.0.0.1:11435`.
-  Pulls + (optionally) prunes models declared in `OLLAMA["models"]`.
+  Pulls + (optionally) prunes models declared in `OLLAMA["models"]`. Optional
+  boot-time model warmup via `OLLAMA["warmup_model"]`.
 - ComfyUI: pinned source tarball + uv venv + PyTorch nightly, Flux.1 Kontext
-  GGUF stack for img2img on MPS. Bound to `127.0.0.1:8189`.
+  GGUF stack for img2img on MPS. Bound to `127.0.0.1:8189`. Workflow JSONs
+  under `files/comfyui-workflows/` sync to the install on each deploy.
+- Whisper.cpp: built from source via cmake (the Homebrew formula ships with
+  the HTTP server disabled). Loopback on `127.0.0.1:8191`, Metal-accelerated,
+  default `ggml-large-v3-turbo-q5_0.bin` (~574 MB).
+- Piper TTS: `piper-tts[http]` in a uv venv running upstream's
+  `python -m piper.http_server`. Loopback on `127.0.0.1:8193`. Voice files
+  pulled by `piper.download_voices`.
 - Beszel agent (optional): outbound WebSocket to the raspi monitoring hub.
 - Apple Screen Sharing (optional): toggled via `SCREEN_SHARING`.
-- Storage: Time Machine + Spotlight excludes for `/Users/Shared/*-models`.
+- Storage: Time Machine + Spotlight excludes for every `/Users/Shared/*-models|voices` dir.
 - Log rotation: daily copytruncate of launchd-captured logs (10 MiB threshold).
+- Healthcheck: 60-second poll of each upstream's loopback port. Three
+  consecutive failures kicks the offending daemon via `launchctl kickstart -k`.
+- Disk pressure alert: hourly `df` on `/Users/Shared`, emits a `user.warn`
+  syslog entry below `DISK_ALERT_GB`.
+
+## Ports
+
+| Port | Service                |
+|------|------------------------|
+| 22   | SSH (LAN + WG only)    |
+| 5900 | Apple Screen Sharing (optional) |
+| 8188 | ComfyUI (via Caddy)    |
+| 8189 | ComfyUI (loopback)     |
+| 8190 | Whisper.cpp (via Caddy) |
+| 8191 | Whisper.cpp (loopback) |
+| 8192 | Piper TTS (via Caddy)  |
+| 8193 | Piper TTS (loopback)   |
+| 11434 | Ollama (via Caddy)    |
+| 11435 | Ollama (loopback)     |
 
 ## First-time setup
 
@@ -30,9 +59,10 @@ ComfyUI (Flux Kontext img2img) as LAN-facing endpoints. Sibling to `../raspi`.
 2. Place your SSH public key on the Mini manually (`ssh-copy-id`) so pyinfra can connect.
 3. Copy `inventory.example.py` → `inventory.py` and `group_data/all.example.py` → `group_data/all.py`.
    Fill in LAN IP, SSH user, and add the same public key to `SSH["authorized_keys"]`.
-4. (Optional) For bearer-token auth: create a Bitwarden folder `mini`, items
-   `ollama` and/or `comfyui` with hidden field `api_key` (`openssl rand -hex 32`),
-   then flip `OLLAMA["require_api_key"]` / `COMFYUI["require_api_key"]` to True.
+4. (Optional) For bearer-token auth: create a Bitwarden folder `mini`, an item
+   per service (`ollama`, `comfyui`, `whisper`, `piper`) with a hidden field
+   `api_key` (`openssl rand -hex 32`), then flip the matching
+   `require_api_key` flag to True.
 5. (Optional) For Beszel monitoring: BW item `mini/beszel-agent` with hidden
    fields `token` + `key` (copied from the raspi hub), then `BESZEL["enabled"] = True`.
 6. `set -x BW_SESSION (bw unlock --raw)` when any of the above needs BW.
@@ -54,8 +84,9 @@ uv run pyinfra inventory.py tasks/caddy.py
 set -x BW_SESSION (bw unlock --raw)
 uv run pyinfra inventory.py tasks/secrets.py tasks/caddy.py
 
-# Bump ComfyUI to a new git tag
-# edit COMFYUI["version"] in group_data/all.py, then:
+# Bump ComfyUI / Whisper / Piper to a new release
+# edit COMFYUI["version"] (or WHISPER["version"], PIPER["version"]) in
+# group_data/all.py, then:
 uv run pyinfra inventory.py tasks/comfyui.py
 ```
 
@@ -104,6 +135,24 @@ curl http://192.168.x.y:11434/api/generate \
 curl -X POST http://192.168.x.y:8188/prompt \
   -H "Content-Type: application/json" \
   -d @workflow.json
+```
+
+### Whisper STT
+
+```fish
+# Multipart POST a WAV. Returns JSON with the transcribed text.
+curl -X POST -F file=@audio.wav \
+  -F response_format=json \
+  http://192.168.x.y:8190/inference
+```
+
+### Piper TTS
+
+```fish
+# POST text, get WAV. Voice is fixed in PIPER["voice"]/voice_quality.
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"text": "hello world"}' \
+  -o out.wav http://192.168.x.y:8192/
 ```
 
 See `CLAUDE.md` for architecture, secrets handling, memory budget, and per-task patterns.
