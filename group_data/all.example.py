@@ -106,11 +106,16 @@ PIPER = {
     "version": "1.4.2",  # piper-tts on PyPI
     "port": 8192,
     "internal_port": 8193,
-    # Voice slug — must match a folder under
-    # https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/<voice>/
-    # The deploy downloads `<voice>-<quality>.onnx` + `.onnx.json`.
-    "voice": "amy",
-    "voice_quality": "medium",
+    # Voice slugs (`<lang>-<voice>-<quality>`) from
+    # https://huggingface.co/rhasspy/piper-voices/. List as many as you want;
+    # the first seeds the daemon (`-m`), and clients can switch at request
+    # time by including `"voice": "<slug>"` in the POST body. Languages
+    # catalogued at https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md
+    # — 40+ supported (en_US, fi_FI, de_DE, fr_FR, sv_SE, ja_JP, …).
+    "voices": [
+        "en_US-amy-medium",
+        "fi_FI-harri-medium",
+    ],
     # When True, Caddy enforces `Authorization: Bearer $PIPER_API_KEY`.
     "require_api_key": False,
 }

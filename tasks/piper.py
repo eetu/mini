@@ -10,11 +10,13 @@ OpenAI-compatible — calling apps need a thin adapter if they expect
 `/v1/audio/speech`. We trade compatibility for one less moving part on the
 Mini.
 
-Voices: each is a pair of files (`<lang>-<voice>-<quality>.onnx` + the
-matching `.onnx.json` config) under `/Users/Shared/piper-voices/`. The
-upstream `piper.download_voices` CLI handles the download + checksum step;
-we shell out to it inside the venv so we don't have to track URLs / sizes
-here. Re-runs are cheap — the CLI skips already-present files.
+Voices: PIPER["voices"] is a list of slugs (`<lang>-<voice>-<quality>`); each
+is a pair of files under `/Users/Shared/piper-voices/`. The bundled
+`piper.download_voices` CLI handles the download + checksum step. The first
+slug in the list is passed as `-m` to `piper.http_server` to seed the daemon;
+all listed slugs are loadable at request time by including
+`"voice": "<slug>"` in the POST body, since `--data-dir` makes them all
+visible. Re-runs are cheap — the CLI skips already-present files.
 """
 
 import hashlib
@@ -37,9 +39,15 @@ LOG_PATH = "/opt/homebrew/var/log/piper.log"
 
 VERSION = PIPER["version"]
 INTERNAL_PORT = PIPER["internal_port"]
-# Piper voice slug: <lang>-<voice>-<quality>. The download CLI accepts this
-# form and pulls both the .onnx + .onnx.json from rhasspy/piper-voices.
-VOICE_SLUG = f"en_US-{PIPER['voice']}-{PIPER['voice_quality']}"
+# Piper voice slugs: <lang>-<voice>-<quality>. The download CLI accepts these
+# directly and pulls both .onnx + .onnx.json from rhasspy/piper-voices. First
+# entry seeds the daemon (passed as `-m`); the rest are loadable at request
+# time by clients via the JSON `"voice"` field, since they all live under
+# the same --data-dir.
+VOICE_SLUGS = list(PIPER["voices"])
+if not VOICE_SLUGS:
+    raise RuntimeError("PIPER['voices'] must list at least one voice slug")
+DEFAULT_VOICE = VOICE_SLUGS[0]
 
 # --- Voice directory (root-owned, survives venv rebuilds) ---
 files.directory(
@@ -73,30 +81,35 @@ server.shell(
     ],
 )
 
-# --- Pull the voice files ---
-# `piper.download_voices` skips already-present files, so this is idempotent.
-# Voice files are tiny (~63 MB for a medium quality), download is fast.
-server.shell(
-    name=f"Download piper voice {VOICE_SLUG}",
-    commands=[
-        textwrap.dedent(f"""
-        if [ -f "{VOICES_PATH}/{VOICE_SLUG}.onnx" ] && \\
-           [ -f "{VOICES_PATH}/{VOICE_SLUG}.onnx.json" ]; then
-          exit 0
-        fi
-        {VENV_PYTHON} -m piper.download_voices \\
-          --data-dir {VOICES_PATH} \\
-          {VOICE_SLUG}
-        """).strip(),
-    ],
-)
+# --- Pull every configured voice ---
+# `piper.download_voices` skips already-present files, so each call is
+# idempotent. Medium-quality voices are ~63 MB; low-quality variants are
+# smaller. Listing each voice as its own pyinfra op gives clearer logs than
+# folding them into a shell loop.
+for _slug in VOICE_SLUGS:
+    server.shell(
+        name=f"Download piper voice {_slug}",
+        commands=[
+            textwrap.dedent(f"""
+            if [ -f "{VOICES_PATH}/{_slug}.onnx" ] && \\
+               [ -f "{VOICES_PATH}/{_slug}.onnx.json" ]; then
+              exit 0
+            fi
+            {VENV_PYTHON} -m piper.download_voices \\
+              --data-dir {VOICES_PATH} \\
+              {_slug}
+            """).strip(),
+        ],
+    )
 
 # --- Wrapper script ---
+# `-m` only sets the default voice. All voices under --data-dir are loadable
+# at request time when the client passes `"voice": "<slug>"` in the JSON body.
 _wrapper = textwrap.dedent(f"""
 #!/bin/sh
 set -e
 exec {VENV_PYTHON} -m piper.http_server \\
-    --model {VOICE_SLUG} \\
+    --model {DEFAULT_VOICE} \\
     --data-dir {VOICES_PATH} \\
     --host 127.0.0.1 \\
     --port {INTERNAL_PORT}
@@ -148,9 +161,10 @@ files.put(
     mode="644",
 )
 
-# Hash plist + wrapper + version + voice slug so any edit kicks the daemon.
+# Hash plist + wrapper + version + voice list so any voice add/remove + any
+# edit kicks the daemon.
 _static_hash = hashlib.sha256(
-    (_plist + _wrapper + VERSION + str(INTERNAL_PORT) + VOICE_SLUG).encode(),
+    (_plist + _wrapper + VERSION + str(INTERNAL_PORT) + ",".join(VOICE_SLUGS)).encode(),
 ).hexdigest()
 
 server.shell(
