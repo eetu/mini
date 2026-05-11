@@ -21,6 +21,8 @@ from pyinfra.operations import server
 EXCLUDED_PATHS = (
     "/Users/Shared/ollama-models",
     "/Users/Shared/comfyui-models",
+    "/Users/Shared/whisper-models",
+    "/Users/Shared/piper-voices",
 )
 
 for _path in EXCLUDED_PATHS:

@@ -20,7 +20,7 @@ import textwrap
 
 from pyinfra.operations import files, server
 
-from group_data.all import COMFYUI, OLLAMA
+from group_data.all import COMFYUI, OLLAMA, PIPER, WHISPER
 from tasks.util import kickstart_if_changed
 
 LABEL = "com.eetu.healthcheck"
@@ -34,9 +34,15 @@ CURL_TIMEOUT = 5
 
 # (launchd label, healthcheck URL). We probe the internal loopback port so the
 # check exercises only the upstream service, not Caddy or pf.
+# - ollama  /api/tags        — daemon-level readiness, no model load
+# - comfyui /system_stats    — JSON OK once the workflow runtime is up
+# - whisper /                — index page; whisper-server has no /health route
+# - piper   /                — index page; piper.http_server has no /health
 CHECKS = (
     ("com.eetu.ollama", f"http://127.0.0.1:{OLLAMA['internal_port']}/api/tags"),
     ("com.eetu.comfyui", f"http://127.0.0.1:{COMFYUI['internal_port']}/system_stats"),
+    ("com.eetu.whisper", f"http://127.0.0.1:{WHISPER['internal_port']}/"),
+    ("com.eetu.piper", f"http://127.0.0.1:{PIPER['internal_port']}/"),
 )
 
 _check_calls = "\n".join(f'check "{label}" "{url}"' for label, url in CHECKS)

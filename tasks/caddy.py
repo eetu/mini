@@ -1,10 +1,11 @@
-"""Caddy as the LAN-facing gateway in front of ollama and ComfyUI.
+"""Caddy as the LAN-facing gateway in front of every Mini upstream.
 
 Always installed — provides a stable indirection layer regardless of whether
-auth is enforced. Each upstream gets its own `:port` site block. When the
-service's `require_api_key` flag is True, Caddy gates every request on
-`Authorization: Bearer $<SERVICE>_API_KEY`. Otherwise the block is a
-transparent reverse proxy and the LAN+pf perimeter is the only trust boundary.
+auth is enforced. Each entry in `SERVICES` mints one `:port` site block
+fronting a 127.0.0.1 upstream. When the service's `require_api_key` flag is
+True, Caddy gates every request on `Authorization: Bearer $<SERVICE>_API_KEY`.
+Otherwise the block is a transparent reverse proxy and the LAN+pf perimeter
+is the only trust boundary.
 """
 
 import hashlib
@@ -12,10 +13,21 @@ import io
 
 from pyinfra.operations import files, server
 
-from group_data.all import COMFYUI, OLLAMA
+from group_data.all import COMFYUI, OLLAMA, PIPER, WHISPER
 from tasks.util import kickstart_if_changed
 
 LABEL = "com.eetu.caddy"
+
+# (name, config-dict, bearer-env-var-name). Each entry mints one `:port` site
+# block fronting a 127.0.0.1 upstream. Append a tuple here to route a new
+# service; the rest of the file iterates the list. The bearer env-var name
+# must match what tasks/secrets.py writes into /etc/secrets/<name>.env.
+SERVICES = (
+    ("ollama", OLLAMA, "OLLAMA_API_KEY"),
+    ("comfyui", COMFYUI, "COMFYUI_API_KEY"),
+    ("whisper", WHISPER, "WHISPER_API_KEY"),
+    ("piper", PIPER, "PIPER_API_KEY"),
+)
 PLIST_PATH = f"/Library/LaunchDaemons/{LABEL}.plist"
 WRAPPER_PATH = "/usr/local/bin/caddy-run.sh"
 CADDYFILE_PATH = "/etc/caddy/Caddyfile"
@@ -83,31 +95,25 @@ def _site_block(port, upstream_port, env_var, require_api_key):
 """
 
 
-_caddyfile = (
-    "{\n    admin off\n    auto_https off\n}\n\n"
-    + _site_block(
-        OLLAMA["port"],
-        OLLAMA["internal_port"],
-        "OLLAMA_API_KEY",
-        OLLAMA.get("require_api_key", False),
+_caddyfile = "{\n    admin off\n    auto_https off\n}\n\n" + "\n".join(
+    _site_block(
+        cfg["port"],
+        cfg["internal_port"],
+        env_var,
+        cfg.get("require_api_key", False),
     )
-    + "\n"
-    + _site_block(
-        COMFYUI["port"],
-        COMFYUI["internal_port"],
-        "COMFYUI_API_KEY",
-        COMFYUI.get("require_api_key", False),
-    )
+    for _, cfg, env_var in SERVICES
 )
 
 # --- Wrapper script ---
-# Sources both /etc/secrets/<service>.env files when present so
+# Sources every /etc/secrets/<service>.env when present so
 # {env.<SERVICE>_API_KEY} placeholders in the Caddyfile resolve at startup.
-# Rotating either secret only requires re-running tasks/secrets.py +
-# tasks/caddy.py — the env-file hashes trip kickstart_if_changed below.
-_wrapper = """#!/bin/sh
+# Rotating any secret only requires re-running tasks/secrets.py + tasks/caddy.py
+# — the env-file hashes trip kickstart_if_changed below.
+_env_paths = " ".join(f"/etc/secrets/{name}.env" for name, _, _ in SERVICES)
+_wrapper = f"""#!/bin/sh
 set -e
-for f in /etc/secrets/ollama.env /etc/secrets/comfyui.env; do
+for f in {_env_paths}; do
   if [ -f "$f" ]; then
     set -a
     . "$f"
@@ -191,12 +197,7 @@ _static_hash = hashlib.sha256(
 ).hexdigest()
 
 _env_files = tuple(
-    path
-    for path, present in (
-        ("/etc/secrets/ollama.env", OLLAMA.get("require_api_key")),
-        ("/etc/secrets/comfyui.env", COMFYUI.get("require_api_key")),
-    )
-    if present
+    f"/etc/secrets/{name}.env" for name, cfg, _ in SERVICES if cfg.get("require_api_key")
 )
 
 server.shell(

@@ -10,7 +10,7 @@ import shlex
 from pyinfra.operations import files
 
 import vault as bw
-from group_data.all import BESZEL, COMFYUI, OLLAMA
+from group_data.all import BESZEL, COMFYUI, OLLAMA, PIPER, WHISPER
 
 
 def _put_secret(name, content, dest, mode="600", group="wheel"):
@@ -60,6 +60,36 @@ else:
     files.file(
         name="Remove /etc/secrets/comfyui.env (auth disabled)",
         path="/etc/secrets/comfyui.env",
+        present=False,
+    )
+
+# --- Whisper API key (only when auth is enabled) ---
+
+if WHISPER.get("require_api_key"):
+    _put_secret(
+        "whisper.env",
+        f"WHISPER_API_KEY={bw.whisper_api_key()}\n",
+        "/etc/secrets/whisper.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/whisper.env (auth disabled)",
+        path="/etc/secrets/whisper.env",
+        present=False,
+    )
+
+# --- Piper API key (only when auth is enabled) ---
+
+if PIPER.get("require_api_key"):
+    _put_secret(
+        "piper.env",
+        f"PIPER_API_KEY={bw.piper_api_key()}\n",
+        "/etc/secrets/piper.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/piper.env (auth disabled)",
+        path="/etc/secrets/piper.env",
         present=False,
     )
 

@@ -82,6 +82,39 @@ CADDY = {
     "version": "2",  # tracks the Homebrew major; pin if you want exact reproducibility
 }
 
+# Whisper.cpp — speech-to-text. The Homebrew formula disables the HTTP server
+# (`WHISPER_BUILD_SERVER=OFF`), so tasks/whisper.py clones whisper.cpp at this
+# tag and builds `whisper-server` from source via cmake. Model defaults to
+# Large-v3-turbo q5_0 (~574 MB; ~50x realtime on M4 Pro). Other models from
+# https://huggingface.co/ggerganov/whisper.cpp/tree/main.
+WHISPER = {
+    "version": "v1.8.4",
+    "port": 8190,
+    "internal_port": 8191,
+    "model_filename": "ggml-large-v3-turbo-q5_0.bin",
+    # When True, Caddy enforces `Authorization: Bearer $WHISPER_API_KEY`.
+    # Token comes from the `whisper` Bitwarden item, field `api_key`.
+    "require_api_key": False,
+}
+
+# Piper TTS — text-to-speech. Pure-Python install via uv venv pulling
+# piper-tts from PyPI; tasks/piper.py wraps it in a tiny FastAPI service
+# exposing OpenAI-compatible `/v1/audio/speech`. Voices download from the
+# rhasspy/piper-voices HF repo. Pin piper-tts version to the latest PyPI
+# release that ships an arm64 macOS wheel.
+PIPER = {
+    "version": "1.4.2",  # piper-tts on PyPI
+    "port": 8192,
+    "internal_port": 8193,
+    # Voice slug — must match a folder under
+    # https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/<voice>/
+    # The deploy downloads `<voice>-<quality>.onnx` + `.onnx.json`.
+    "voice": "amy",
+    "voice_quality": "medium",
+    # When True, Caddy enforces `Authorization: Bearer $PIPER_API_KEY`.
+    "require_api_key": False,
+}
+
 # ComfyUI — opinionated img2img stack built around Flux.1 Kontext [dev] FP8.
 # tasks/comfyui.py installs ComfyUI from the GitHub source tarball for
 # COMFYUI["version"] into /Applications/ComfyUI/, builds a `.venv` via `uv`

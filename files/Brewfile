@@ -16,6 +16,10 @@ brew "zoxide"
 # the upstream requirements.txt. Provides a hermetic Python toolchain
 # independent of system python and any user-level pyenv state.
 brew "uv"
+# cmake — tasks/whisper.py builds whisper.cpp's HTTP server from source
+# because the Homebrew whisper-cpp formula disables it via
+# -DWHISPER_BUILD_SERVER=OFF (it only ships whisper-cli).
+brew "cmake"
 
 # Service binaries — pinned by their own tasks/*.py for version control.
 # Listed here so brew tracks them; the launchd plist owns lifecycle.
