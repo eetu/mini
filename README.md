@@ -26,8 +26,9 @@ local AI services as LAN-facing endpoints: chat LLMs (Ollama), img2img
   the HTTP server disabled). Loopback on `127.0.0.1:8191`, Metal-accelerated,
   default `ggml-large-v3-turbo-q5_0.bin` (~574 MB).
 - Piper TTS: `piper-tts[http]` in a uv venv running upstream's
-  `python -m piper.http_server`. Loopback on `127.0.0.1:8193`. Voice files
-  pulled by `piper.download_voices`.
+  `python -m piper.http_server`. Loopback on `127.0.0.1:8193`. All slugs in
+  `PIPER["voices"]` are downloaded and loadable; clients pick at request
+  time. 40+ languages upstream.
 - Beszel agent (optional): outbound WebSocket to the raspi monitoring hub.
 - Apple Screen Sharing (optional): toggled via `SCREEN_SHARING`.
 - Storage: Time Machine + Spotlight excludes for every `/Users/Shared/*-models|voices` dir.
@@ -141,6 +142,10 @@ curl -X POST http://192.168.x.y:8188/prompt \
 
 ```fish
 # Multipart POST a WAV. Returns JSON with the transcribed text.
+# Language is auto-detected; pass `-F language=fi` to pin.
+# Non-WAV input is NOT enabled — clients re-encode (`ffmpeg -i in.m4a out.wav`)
+# before posting. Enabling on-server requires --convert + ffmpeg in the
+# Brewfile.
 curl -X POST -F file=@audio.wav \
   -F response_format=json \
   http://192.168.x.y:8190/inference
@@ -149,10 +154,19 @@ curl -X POST -F file=@audio.wav \
 ### Piper TTS
 
 ```fish
-# POST text, get WAV. Voice is fixed in PIPER["voice"]/voice_quality.
+# POST text, get WAV. Default voice is PIPER["voices"][0]; client can pick
+# any other listed slug via "voice" in the body.
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"text": "hello world"}' \
+  -d '{"text": "hello world", "voice": "en_US-amy-medium"}' \
   -o out.wav http://192.168.x.y:8192/
+
+# Finnish
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"text": "hei maailma", "voice": "fi_FI-harri-medium"}' \
+  -o out.wav http://192.168.x.y:8192/
+
+# List loaded voices
+curl http://192.168.x.y:8192/voices
 ```
 
 See `CLAUDE.md` for architecture, secrets handling, memory budget, and per-task patterns.
