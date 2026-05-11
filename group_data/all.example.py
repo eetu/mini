@@ -63,9 +63,20 @@ OLLAMA = {
     # 15m frees memory between coding sessions; bump if you find yourself waiting through reloads.
     # Per-request override: include `"keep_alive": "1h"` (or `0`) in the JSON body.
     "keep_alive": "15m",
+    # Model to warm into RAM at every Mini boot. Fires once after the daemon
+    # comes up so the first interactive request doesn't pay the ~5–15 s cold
+    # load. Set to None to disable. Must be one of `models` above.
+    "warmup_model": "gemma4:26b",
     # Where ollama stores model blobs. Survives `brew uninstall ollama`.
     "models_path": "/Users/Shared/ollama-models",
 }
+
+# Disk space alert threshold (GB). When free space on the volume containing
+# /Users/Shared drops below this, tasks/diskalert.py emits a `user.warn`
+# entry to the macOS unified log every hour. 20 GB leaves ~2x headroom for a
+# Flux model download mid-deploy. Visible via:
+#   log show --predicate 'eventMessage contains "mini-diskalert"' --last 1d
+DISK_ALERT_GB = 20
 
 CADDY = {
     "version": "2",  # tracks the Homebrew major; pin if you want exact reproducibility

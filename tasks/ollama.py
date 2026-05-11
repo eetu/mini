@@ -202,3 +202,103 @@ server.shell(
         """,
     ],
 )
+
+# --- Boot-time model warmup ---
+# Loads the primary chat model into RAM after every Mini boot so the first
+# interactive request doesn't pay the cold-load latency (~5–15 s for a 26B
+# q4_K_M model on this hardware). One-shot launchd job: RunAtLoad fires once
+# at boot, no KeepAlive (we don't want it to thrash on every transient
+# failure). Polls /api/tags until the daemon answers, then issues a tiny
+# /api/generate with `keep_alive` matching OLLAMA["keep_alive"] so the warm
+# state survives long enough to matter without pinning RAM forever.
+_warmup_model = OLLAMA.get("warmup_model")
+_warmup_label = "com.eetu.ollama-warmup"
+_warmup_plist_path = f"/Library/LaunchDaemons/{_warmup_label}.plist"
+_warmup_script_path = "/usr/local/bin/mini-ollama-warmup.sh"
+_warmup_log_path = "/opt/homebrew/var/log/ollama-warmup.log"
+
+if _warmup_model:
+    _warmup_script = f"""#!/bin/sh
+set -u
+HOST="{INTERNAL_HOST}"
+MODEL="{_warmup_model}"
+KEEP_ALIVE="{OLLAMA["keep_alive"]}"
+
+# Wait up to 5 minutes for ollama to accept requests after the system boots.
+# `KeepAlive=true` on the ollama daemon plus pmset auto-restart means we'll
+# almost always race the daemon during early boot; long timeout is fine.
+for _ in $(seq 1 60); do
+  if curl -fsS --max-time 3 "http://$HOST/api/tags" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 5
+done
+
+# Issue a 1-token generate so the model loads. `keep_alive` overrides the
+# daemon default for this request so a 0s default wouldn't immediately evict.
+curl -fsS --max-time 120 \\
+  -H 'Content-Type: application/json' \\
+  -d "{{\\"model\\": \\"$MODEL\\", \\"prompt\\": \\"hi\\", \\"stream\\": false, \\"keep_alive\\": \\"$KEEP_ALIVE\\"}}" \\
+  "http://$HOST/api/generate" >/dev/null
+echo "warmed $MODEL"
+"""
+
+    files.put(
+        name="Write ollama-warmup script",
+        src=io.BytesIO(_warmup_script.encode()),
+        dest=_warmup_script_path,
+        user="root",
+        group="wheel",
+        mode="755",
+    )
+
+    # One-shot at load. No KeepAlive (don't respawn — if the script fails,
+    # ollama will load on first user request anyway). No StartInterval.
+    _warmup_plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists/1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{_warmup_label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{_warmup_script_path}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>{_warmup_log_path}</string>
+  <key>StandardErrorPath</key>
+  <string>{_warmup_log_path}</string>
+</dict>
+</plist>
+"""
+
+    files.put(
+        name="Write ollama-warmup plist",
+        src=io.BytesIO(_warmup_plist.encode()),
+        dest=_warmup_plist_path,
+        user="root",
+        group="wheel",
+        mode="644",
+    )
+
+    _warmup_hash = hashlib.sha256((_warmup_script + _warmup_plist).encode()).hexdigest()
+
+    server.shell(
+        name="Bootstrap ollama-warmup + reload on change",
+        commands=[kickstart_if_changed(_warmup_label, _warmup_hash)],
+    )
+else:
+    # Disabled: bootout and clean up so the box doesn't carry stale plist/script.
+    server.shell(
+        name="Tear down ollama-warmup (disabled)",
+        commands=[
+            f"""
+            if launchctl print system/{_warmup_label} >/dev/null 2>&1; then
+              launchctl bootout system/{_warmup_label} || true
+            fi
+            rm -f {_warmup_plist_path} /var/db/.{_warmup_label}-stamp {_warmup_script_path}
+            """,
+        ],
+    )

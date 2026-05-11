@@ -56,8 +56,10 @@ Speed knobs:
     from step ~3 onward.
 """
 
+import glob
 import hashlib
 import io
+import os
 import textwrap
 
 from pyinfra.operations import files, server
@@ -342,4 +344,33 @@ for _subdir, _filename, _url in MODELS:
             fi
             """).strip(),
         ],
+    )
+
+# --- Workflow registry ---
+# Any .json in files/comfyui-workflows/ gets copied to ComfyUI's user workflow
+# dir on the Mini. ComfyUI picks them up next time the daemon starts (UI scans
+# at load); headless POSTs to /prompt don't need them present. Use this to
+# version-control reusable workflow JSON alongside the IaC so the chat app's
+# expected workflow shape can't drift from what's installed.
+WORKFLOWS_LOCAL = "files/comfyui-workflows"
+WORKFLOWS_REMOTE = f"{INSTALL_PATH}/user/default/workflows"
+
+files.directory(
+    name=f"Create {WORKFLOWS_REMOTE}",
+    path=WORKFLOWS_REMOTE,
+    user="root",
+    group="wheel",
+    mode="755",
+    present=True,
+)
+
+for _local_path in sorted(glob.glob(f"{WORKFLOWS_LOCAL}/*.json")):
+    _basename = os.path.basename(_local_path)
+    files.put(
+        name=f"Sync workflow {_basename}",
+        src=_local_path,
+        dest=f"{WORKFLOWS_REMOTE}/{_basename}",
+        user="root",
+        group="wheel",
+        mode="644",
     )
