@@ -94,7 +94,13 @@ WHISPER = {
     "version": "v1.8.4",
     "port": 8190,
     "internal_port": 8191,
-    "model_filename": "ggml-large-v3-turbo-q5_0.bin",
+    # Large-v3-turbo q8_0 (~874 MB): turbo's decoder-distilled architecture
+    # keeps inference fast (~40x realtime on M4 Pro Metal), and q8_0 keeps
+    # the language-detection head accurate enough for sub-3-second European
+    # utterances. The cheaper q5_0 variant mis-detects Finnish as
+    # Russian/Polish too often. The matching .bin lives at
+    # https://huggingface.co/ggerganov/whisper.cpp/tree/main.
+    "model_filename": "ggml-large-v3-turbo-q8_0.bin",
     # When True, Caddy enforces `Authorization: Bearer $WHISPER_API_KEY`.
     # Token comes from the `whisper` Bitwarden item, field `api_key`.
     "require_api_key": False,
