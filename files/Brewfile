@@ -20,6 +20,10 @@ brew "uv"
 # because the Homebrew whisper-cpp formula disables it via
 # -DWHISPER_BUILD_SERVER=OFF (it only ships whisper-cli).
 brew "cmake"
+# ffmpeg — files/piper-server.py shells out to it for the optional Ogg/Opus
+# transcode (~10x bandwidth reduction vs WAV, and clean MSE playback). Also
+# available as a general escape hatch for any media task on the Mini.
+brew "ffmpeg"
 
 # Service binaries — pinned by their own tasks/*.py for version control.
 # Listed here so brew tracks them; the launchd plist owns lifecycle.
