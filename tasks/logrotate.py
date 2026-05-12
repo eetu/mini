@@ -30,10 +30,20 @@ LOG_PATH = "/opt/homebrew/var/log/log-rotate.log"
 
 # (log path, retained .N.gz count). Threshold for rotation is hard-coded
 # below — any file over 10 MiB rolls; smaller files are left alone.
+# Caddy's access.log self-rotates inside Caddy via roll_size/roll_keep, so
+# it's intentionally absent here — only the daemon's stdout/stderr go through
+# this rotator. Any service that writes via launchd's StandardOut/ErrorPath
+# needs an entry, otherwise the file grows unbounded.
 ROTATIONS = (
     ("/opt/homebrew/var/log/ollama.log", 7),
+    ("/opt/homebrew/var/log/ollama-warmup.log", 3),
     ("/opt/homebrew/var/log/comfyui.log", 7),
+    ("/opt/homebrew/var/log/whisper.log", 7),
+    ("/opt/homebrew/var/log/piper.log", 7),
     ("/opt/homebrew/var/log/beszel-agent.log", 7),
+    ("/opt/homebrew/var/log/healthcheck.log", 3),
+    ("/opt/homebrew/var/log/diskalert.log", 3),
+    ("/opt/homebrew/var/log/log-rotate.log", 3),
     ("/opt/homebrew/var/log/caddy/stdout.log", 3),
     ("/opt/homebrew/var/log/caddy/stderr.log", 3),
 )

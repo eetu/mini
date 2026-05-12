@@ -36,13 +36,15 @@ CURL_TIMEOUT = 5
 # check exercises only the upstream service, not Caddy or pf.
 # - ollama  /api/tags        — daemon-level readiness, no model load
 # - comfyui /system_stats    — JSON OK once the workflow runtime is up
-# - whisper /                — index page; whisper-server has no /health route
-# - piper   /                — index page; piper.http_server has no /health
+# - whisper /                — whisper-server's index page returns 200 on GET
+# - piper   /voices          — POST-only / returns 405 to GET; /voices is a
+#                              GET endpoint our custom wrapper exposes, so it
+#                              doubles as the readiness probe
 CHECKS = (
     ("com.eetu.ollama", f"http://127.0.0.1:{OLLAMA['internal_port']}/api/tags"),
     ("com.eetu.comfyui", f"http://127.0.0.1:{COMFYUI['internal_port']}/system_stats"),
     ("com.eetu.whisper", f"http://127.0.0.1:{WHISPER['internal_port']}/"),
-    ("com.eetu.piper", f"http://127.0.0.1:{PIPER['internal_port']}/"),
+    ("com.eetu.piper", f"http://127.0.0.1:{PIPER['internal_port']}/voices"),
 )
 
 _check_calls = "\n".join(f'check "{label}" "{url}"' for label, url in CHECKS)
