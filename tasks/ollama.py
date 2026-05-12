@@ -163,9 +163,20 @@ _models_hash = hashlib.sha256(f"{_models_joined}|prune={_prune}".encode()).hexdi
 # Walks `ollama list` and deletes anything not in the desired set. Models in
 # the list but not yet on disk are pulled by the loop above, so by the time
 # we reach this we know the desired set is fully present.
+#
+# Tag normalization: `ollama pull <name>` without a tag stores the model as
+# `<name>:latest`, but the user's config may list the bare name. We expand
+# both the desired set and the observed set to canonical `<name>:<tag>` form
+# before comparing, so `nomic-embed-text` in config matches the
+# `nomic-embed-text:latest` row in `ollama list`. Without this, the prune
+# walk would re-delete every bare-name model right after pulling it.
 _prune_block = (
     f"""
-        DESIRED=" {_models_joined} "
+        DESIRED=""
+        for m in {_models_joined}; do
+          case "$m" in *:*) DESIRED="$DESIRED $m" ;; *) DESIRED="$DESIRED $m:latest" ;; esac
+        done
+        DESIRED=" $DESIRED "
         for m in $({BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}'); do
           case "$DESIRED" in
             *" $m "*) ;;
@@ -193,7 +204,10 @@ server.shell(
           sleep 1
         done
         for model in {_models_joined}; do
-          if ! {BIN_PATH} list 2>/dev/null | awk '{{print $1}}' | grep -qx "$model"; then
+          # Normalize the lookup name: bare `nomic-embed-text` matches
+          # `nomic-embed-text:latest` as ollama stores it.
+          case "$model" in *:*) target="$model" ;; *) target="$model:latest" ;; esac
+          if ! {BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}' | grep -qx "$target"; then
             {BIN_PATH} pull "$model"
           fi
         done

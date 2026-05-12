@@ -51,9 +51,12 @@ OLLAMA = {
         "gemma4:26b",
         "gemma4:e4b",
         # Embedding model for RAG / semantic search via /api/embeddings.
-        # 137M params, ~270 MB on disk, negligible RAM compared to the chat
-        # models. Add to keep RAG pipelines on the same endpoint as chat.
-        "nomic-embed-text",
+        # embeddinggemma:300m: 300M params, 768-dim (Matryoshka-truncatable
+        # to 512/256/128), ~622 MB, 100+ languages including Finnish.
+        # Released Sep 2025; SoTA for sub-500M multilingual embeddings.
+        # Requires ollama >= 0.11.10. Replaced the older nomic-embed-text
+        # (Apache 2.0, 2023, English-only, 137M).
+        "embeddinggemma:300m",
     ],
     # Strict declarative mode for the model set. False (default) leaves
     # ad-hoc-pulled models in place. True turns the deploy into a reconciler
