@@ -101,14 +101,19 @@ server.shell(
 )
 
 # --- Wrapper script ---
-# `--print-progress false` keeps the log readable. `--inference-path` defaults
-# to `/inference`; we keep that name and let the chat app rewrite if it wants
-# an OpenAI-style path.
+# `--language auto` overrides whisper-cli's `en` default so requests without
+# an explicit `-F language=...` form field get auto-detection. Without this,
+# non-English audio gets *translated* to broken English instead of
+# *transcribed* in the source language. Per-request overrides still win:
+# clients can pass `-F language=fi` (or any ISO code) to pin the language
+# and skip detection. `--inference-path` defaults to `/inference`; we keep
+# that name and let the chat app rewrite if it wants an OpenAI-style path.
 _wrapper = textwrap.dedent(f"""
 #!/bin/sh
 set -e
 exec {BIN_PATH} \\
     --model {MODEL_PATH} \\
+    --language auto \\
     --host 127.0.0.1 \\
     --port {INTERNAL_PORT}
 """).lstrip()
