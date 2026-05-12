@@ -168,9 +168,9 @@ Flip `BESZEL["enabled"]` in `group_data/all.py`, then redeploy. False → True n
 - macOS + apps: keep ~6 GB free for browser/IDE.
 - Gemma4 26B q4_K_M: ~18 GB resident when loaded.
 - Flux Kontext Q6_K (+ T5 Q5_K_M + CLIP-L + VAE + LoRA): ~14 GB resident when loaded.
-- Whisper.cpp large-v3-turbo-q5_0: ~600 MB resident; only loaded during transcription, idle drops to ~50 MB.
+- Whisper.cpp large-v3-turbo-q8_0: ~1.0 GB resident continuously. The model loads at daemon start (whisper-server's `--model` flag is eager, not lazy) and stays mapped for the daemon's lifetime; idle RSS stays ~1 GB rather than dropping. Bouncing the daemon (`launchctl kickstart -k system/com.eetu.whisper`) frees it. Earlier q5_0 quant was ~600 MB but mis-detected Finnish too often — q8_0 buys language-ID accuracy at the memory cost.
 - Piper voice + onnx runtime: ~150 MB resident per voice + ~200 MB Python overhead. Always loaded while the daemon is up.
 - 18 + 14 = 32 GB > 24 GB — Ollama and ComfyUI **cannot both hold a model resident**. The calling app (`../chat`) coordinates eviction by issuing `"keep_alive": 0` to ollama before invoking ComfyUI, then a normal request reloads the LLM after the image job. ComfyUI itself keeps the checkpoint resident until process exit; bouncing the daemon (`launchctl kickstart -k system/com.eetu.comfyui`) frees its RAM.
-- Whisper + Piper coexist with Gemma comfortably (~19 GB) but tighten the budget when Flux is loaded — keep an eye on swap during heavy mixed workloads.
+- Whisper + Piper coexist with Gemma (18 + 1 + 0.4 + ~3 macOS base ≈ 22.4 GB) but the headroom is now ~1.5 GB rather than the ~5 GB before the q8 swap. Mixed Gemma + Whisper + Flux is firmly out — the calling app still has to evict Gemma before invoking Flux. Watch `vm.swapusage` if you start running embedding + chat + STT bursts back-to-back.
 - `OLLAMA["keep_alive"] = "15m"` — model unloads between sessions; first request after idle takes ~5–15 s to reload from NVMe. `OLLAMA["warmup_model"]` (if set) loads the named model into RAM once at every boot so the first interactive request after a reboot doesn't pay the cold-load.
 - Per-request `keep_alive` override wins: agents that hammer the model can pin it for the duration of their run with `"keep_alive": "1h"` in the JSON body.
