@@ -1,22 +1,16 @@
 """Piper TTS endpoint.
 
-Piper ships its own HTTP server (`python -m piper.http_server`) in the
-`piper-tts[http]` extra, so this task is the cleanest of the Python-venv
-stack: uv venv, `pip install piper-tts[http]==VERSION`, download the voice
-files, run the module via LaunchDaemon. No custom wrapper service.
-
-The HTTP API is `POST /` with `{"text": "..."}` returning a WAV body. Not
-OpenAI-compatible — calling apps need a thin adapter if they expect
-`/v1/audio/speech`. We trade compatibility for one less moving part on the
-Mini.
+Uses `piper-tts[http]` from PyPI (uv venv) for the Python API + bundled voice
+downloader, but replaces upstream's buffered `piper.http_server` with our own
+streaming Flask wrapper (`files/piper-server.py`). The wrapper emits chunked
+WAV so first-byte latency stays low for long utterances. `/voices` shape is
+preserved verbatim so existing clients (../chat) don't have to change.
 
 Voices: PIPER["voices"] is a list of slugs (`<lang>-<voice>-<quality>`); each
 is a pair of files under `/Users/Shared/piper-voices/`. The bundled
 `piper.download_voices` CLI handles the download + checksum step. The first
-slug in the list is passed as `-m` to `piper.http_server` to seed the daemon;
-all listed slugs are loadable at request time by including
-`"voice": "<slug>"` in the POST body, since `--data-dir` makes them all
-visible. Re-runs are cheap — the CLI skips already-present files.
+slug in the list is the wrapper's `--default-model`; all listed slugs are
+loadable at request time by including `"voice": "<slug>"` in the POST body.
 """
 
 import hashlib
@@ -33,6 +27,7 @@ PLIST_PATH = f"/Library/LaunchDaemons/{LABEL}.plist"
 WRAPPER_PATH = "/usr/local/bin/piper-run.sh"
 INSTALL_PATH = "/Applications/piper"
 VENV_PYTHON = f"{INSTALL_PATH}/.venv/bin/python"
+SERVER_SCRIPT = f"{INSTALL_PATH}/piper-server.py"
 VERSION_STAMP = f"{INSTALL_PATH}.version"
 VOICES_PATH = "/Users/Shared/piper-voices"
 LOG_PATH = "/opt/homebrew/var/log/piper.log"
@@ -102,14 +97,31 @@ for _slug in VOICE_SLUGS:
         ],
     )
 
+# --- Streaming server script ---
+# Custom Flask wrapper that emits chunked WAV instead of buffering. Source is
+# version-controlled at files/piper-server.py and dropped onto the Mini next
+# to the venv; the launchd plist invokes it via the venv's python.
+files.put(
+    name="Write piper streaming server",
+    src="files/piper-server.py",
+    dest=SERVER_SCRIPT,
+    user="root",
+    group="wheel",
+    mode="755",
+)
+
+with open("files/piper-server.py", "rb") as _server_src_file:
+    _server_src = _server_src_file.read()
+
 # --- Wrapper script ---
-# `-m` only sets the default voice. All voices under --data-dir are loadable
-# at request time when the client passes `"voice": "<slug>"` in the JSON body.
+# `--default-model` sets the voice loaded on startup. All voices under
+# --data-dir are loadable at request time when the client passes
+# `"voice": "<slug>"` in the JSON body.
 _wrapper = textwrap.dedent(f"""
 #!/bin/sh
 set -e
-exec {VENV_PYTHON} -m piper.http_server \\
-    --model {DEFAULT_VOICE} \\
+exec {VENV_PYTHON} {SERVER_SCRIPT} \\
+    --default-model {DEFAULT_VOICE} \\
     --data-dir {VOICES_PATH} \\
     --host 127.0.0.1 \\
     --port {INTERNAL_PORT}
@@ -161,10 +173,13 @@ files.put(
     mode="644",
 )
 
-# Hash plist + wrapper + version + voice list so any voice add/remove + any
-# edit kicks the daemon.
+# Hash plist + wrapper + server script + version + voice list so any voice
+# add/remove, any wrapper tweak, or any server-script edit kicks the daemon.
 _static_hash = hashlib.sha256(
-    (_plist + _wrapper + VERSION + str(INTERNAL_PORT) + ",".join(VOICE_SLUGS)).encode(),
+    _plist.encode()
+    + _wrapper.encode()
+    + _server_src
+    + (VERSION + str(INTERNAL_PORT) + ",".join(VOICE_SLUGS)).encode(),
 ).hexdigest()
 
 server.shell(
