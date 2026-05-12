@@ -114,6 +114,7 @@ PIPER = {
     # — 40+ supported (en_US, fi_FI, de_DE, fr_FR, sv_SE, ja_JP, …).
     "voices": [
         "en_US-amy-medium",
+        "en_US-ryan-medium",
         "fi_FI-harri-medium",
     ],
     # When True, Caddy enforces `Authorization: Bearer $PIPER_API_KEY`.
