@@ -174,4 +174,69 @@ curl -X POST -H "Content-Type: application/json" \
 curl http://192.168.x.y:8192/voices
 ```
 
+## Aborting in-flight requests
+
+Two flavours depending on the upstream:
+
+### Ollama — close the connection
+
+No `/cancel` endpoint. Dropping the TCP connection mid-stream is the abort
+signal: Caddy propagates the cancellation to Ollama, the writer hits a
+broken pipe on the next token, generation stops, and the model context is
+released (the `OLLAMA_KEEP_ALIVE` timer starts fresh). Applies to
+`/api/generate`, `/api/chat`, `/api/embeddings`, and `/v1/chat/completions`.
+
+```js
+// Browser / Node
+const ctrl = new AbortController();
+fetch("http://192.168.x.y:11434/api/chat", {
+  method: "POST",
+  body: JSON.stringify({...}),
+  signal: ctrl.signal,
+});
+ctrl.abort();  // closes the connection -> ollama aborts
+```
+
+```python
+# Python httpx — exit the streaming context to abort
+with httpx.Client() as c, c.stream("POST", url, json=body) as r:
+    for line in r.iter_lines():
+        if should_stop:
+            break  # connection closes here
+```
+
+```fish
+# curl — Ctrl-C closes the connection, ollama logs "context canceled"
+curl -N --max-time 5 http://192.168.x.y:11434/api/generate -d '{...}'
+```
+
+### ComfyUI — `POST /interrupt`
+
+ComfyUI keeps a single in-flight prompt + a queue of pending ones. The
+running prompt is cancelled by an explicit endpoint, not by closing the
+HTTP connection (the original POST returned immediately with the prompt ID;
+the actual work happens asynchronously on the queue).
+
+```fish
+# Cancel the currently running prompt
+curl -X POST http://192.168.x.y:8188/interrupt
+
+# Clear all pending prompts (does NOT stop the one currently running)
+curl -X POST http://192.168.x.y:8188/queue -d '{"clear": true}'
+
+# Delete a specific queued prompt by ID
+curl -X POST http://192.168.x.y:8188/queue \
+  -d '{"delete": ["<prompt_id>"]}'
+```
+
+The running sampler step finishes its current iteration before halting —
+no mid-step kill. WebSocket subscribers (`/ws`) receive
+`execution_interrupted` so UI can react.
+
+### Whisper + Piper — request/response, no abort needed
+
+Both are short turn-around (sub-second to a few seconds). Drop the
+connection if you want to discard the response; the server completes its
+current work but the bytes go nowhere.
+
 See `CLAUDE.md` for architecture, secrets handling, memory budget, and per-task patterns.
