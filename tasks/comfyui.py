@@ -102,6 +102,16 @@ MODELS = (
         "https://huggingface.co/QuantStack/FLUX.1-Kontext-dev-GGUF/resolve/main"
         "/flux1-kontext-dev-Q6_K.gguf",
     ),
+    # Flux.1 Fill [dev] — masked inpaint / outpaint variant of Flux.1-dev.
+    # Same envelope as Kontext (~9.86 GB Q6_K); only one diffusion model is
+    # resident per request so disk-side coexistence is fine. Sourced from
+    # YarvixPA (ungated); city96's parallel repo requires HF auth.
+    (
+        "diffusion_models",
+        "flux1-fill-dev-Q6_K.gguf",
+        "https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-gguf/resolve/main"
+        "/flux1-fill-dev-Q6_K.gguf",
+    ),
     (
         "text_encoders",
         "t5-v1_1-xxl-encoder-Q5_K_M.gguf",

@@ -1,9 +1,9 @@
 # mini
 
 Agentless IaC for a Mac mini M4 Pro (24 GB) running a small constellation of
-local AI services as LAN-facing endpoints: chat LLMs (Ollama), img2img
-(ComfyUI / Flux Kontext), speech-to-text (Whisper.cpp), and text-to-speech
-(Piper). Sibling to `../raspi`.
+local AI services as LAN-facing endpoints: chat LLMs (Ollama), img2img +
+masked inpaint (ComfyUI / Flux Kontext + Flux Fill), speech-to-text
+(Whisper.cpp), and text-to-speech (Piper). Sibling to `../raspi`.
 
 ## What it does
 
@@ -20,7 +20,8 @@ local AI services as LAN-facing endpoints: chat LLMs (Ollama), img2img
   Pulls + (optionally) prunes models declared in `OLLAMA["models"]`. Optional
   boot-time model warmup via `OLLAMA["warmup_model"]`.
 - ComfyUI: pinned source tarball + uv venv + PyTorch nightly, Flux.1 Kontext
-  GGUF stack for img2img on MPS. Bound to `127.0.0.1:8189`. Workflow JSONs
+  GGUF for edit-by-reference img2img + Flux.1 Fill GGUF for masked
+  inpaint/outpaint, both on MPS. Bound to `127.0.0.1:8189`. Workflow JSONs
   under `files/comfyui-workflows/` sync to the install on each deploy.
 - Whisper.cpp: built from source via cmake (the Homebrew formula ships with
   the HTTP server disabled). Loopback on `127.0.0.1:8191`, Metal-accelerated,
@@ -137,6 +138,20 @@ curl http://192.168.x.y:11434/api/generate \
 curl -X POST http://192.168.x.y:8188/prompt \
   -H "Content-Type: application/json" \
   -d @workflow.json
+```
+
+### ComfyUI masked inpaint (Flux Fill)
+
+```fish
+# Upload base image + mask (white = repaint, black = keep)
+curl -X POST -F "image=@input.png" http://192.168.x.y:8188/upload/image
+curl -X POST -F "image=@mask.png"  http://192.168.x.y:8188/upload/image
+
+# Wrap files/comfyui-workflows/flux-fill-inpaint.json in {"prompt": ...}
+# overriding nodes 4.image / 5.image / 6.text / 9.seed, then POST to /prompt.
+curl -X POST http://192.168.x.y:8188/prompt \
+  -H "Content-Type: application/json" \
+  -d @fill-prompt.json
 ```
 
 ### Whisper STT
