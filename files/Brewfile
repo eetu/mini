@@ -22,8 +22,13 @@ brew "uv"
 brew "cmake"
 # ffmpeg — files/piper-server.py shells out to it for the optional Ogg/Opus
 # transcode (~10x bandwidth reduction vs WAV, and clean MSE playback). Also
-# available as a general escape hatch for any media task on the Mini.
+# the workhorse for tasks/scribe_press.py — AAX/AAXC decrypt + remux to M4B.
 brew "ffmpeg"
+
+# rust — tasks/scribe_press.py compiles the press worker from source. No
+# stable cargo-only formula; the meta-formula installs rustc + cargo into
+# /opt/homebrew/bin/.
+brew "rust"
 
 # Service binaries — pinned by their own tasks/*.py for version control.
 # Listed here so brew tracks them; the launchd plist owns lifecycle.

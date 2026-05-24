@@ -92,6 +92,13 @@ def piper_api_key() -> str:
     return _api_key("piper")
 
 
+def scribe_press_api_key() -> str:
+    """Bearer that gates inbound clients hitting scribe-press over Caddy.
+    Same value must be pasted into the raspi `scribe` BW item under
+    `press_token` so the Pi-side backend can authenticate."""
+    return _api_key("scribe-press")
+
+
 def beszel_agent_creds() -> dict:
     """Return TOKEN + KEY for the beszel agent from the `beszel-agent` BW item.
 

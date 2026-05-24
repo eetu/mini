@@ -13,7 +13,7 @@ import io
 
 from pyinfra.operations import files, server
 
-from group_data.all import COMFYUI, OLLAMA, PIPER, WHISPER
+from group_data.all import COMFYUI, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
 from tasks.util import kickstart_if_changed
 
 LABEL = "com.eetu.caddy"
@@ -27,6 +27,7 @@ SERVICES = (
     ("comfyui", COMFYUI, "COMFYUI_API_KEY"),
     ("whisper", WHISPER, "WHISPER_API_KEY"),
     ("piper", PIPER, "PIPER_API_KEY"),
+    ("scribe-press", SCRIBE_PRESS, "SCRIBE_PRESS_API_KEY"),
 )
 PLIST_PATH = f"/Library/LaunchDaemons/{LABEL}.plist"
 WRAPPER_PATH = "/usr/local/bin/caddy-run.sh"
@@ -71,7 +72,19 @@ output file /opt/homebrew/var/log/caddy/access.log {
 def _site_block(port, upstream_port, env_var, require_api_key):
     upstream = f"127.0.0.1:{upstream_port}"
     if require_api_key:
+        # /health is always anonymous — by convention, liveness probes
+        # (Gatus, k8s, uptime monitors) shouldn't carry per-service
+        # secrets. Each upstream decides what `/health` returns; if a
+        # service doesn't expose one, Caddy still proxies through and
+        # the upstream's own 404 surfaces — no info leak.
         return f""":{port} {{
+    @health path /health
+    handle @health {{
+        reverse_proxy {upstream} {{
+            {_PROXY_DIRECTIVES.replace(chr(10), chr(10) + "            ")}
+        }}
+    }}
+
     @authed header Authorization "Bearer {{env.{env_var}}}"
     handle @authed {{
         reverse_proxy {upstream} {{

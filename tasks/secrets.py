@@ -10,7 +10,7 @@ import shlex
 from pyinfra.operations import files
 
 import vault as bw
-from group_data.all import BESZEL, COMFYUI, OLLAMA, PIPER, WHISPER
+from group_data.all import BESZEL, COMFYUI, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
 
 
 def _put_secret(name, content, dest, mode="600", group="wheel"):
@@ -90,6 +90,21 @@ else:
     files.file(
         name="Remove /etc/secrets/piper.env (auth disabled)",
         path="/etc/secrets/piper.env",
+        present=False,
+    )
+
+# --- Scribe-press API key (only when auth is enabled) ---
+
+if SCRIBE_PRESS.get("require_api_key"):
+    _put_secret(
+        "scribe-press.env",
+        f"SCRIBE_PRESS_API_KEY={bw.scribe_press_api_key()}\n",
+        "/etc/secrets/scribe-press.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/scribe-press.env (auth disabled)",
+        path="/etc/secrets/scribe-press.env",
         present=False,
     )
 

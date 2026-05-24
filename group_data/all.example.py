@@ -111,6 +111,28 @@ WHISPER = {
 # exposing OpenAI-compatible `/v1/audio/speech`. Voices download from the
 # rhasspy/piper-voices HF repo. Pin piper-tts version to the latest PyPI
 # release that ships an arm64 macOS wheel.
+# Scribe-press — Audible AAX/AAXC decrypt + remux worker. Compiled from
+# source at the tip of the tracked branch on https://github.com/eetu/scribe.
+# Tracks a moving branch (default `main`), same vibe as the raspi-side
+# `scribe:main` container image — scribe is too young for proper semver.
+# The build step hashes against GH's commit SHA, so a redeploy is a no-op
+# when nothing has changed upstream. Flip to a tag once scribe stabilizes.
+# Pi-side `scribe` backend sends jobs over Caddy with `Authorization:
+# Bearer $SCRIBE_PRESS_API_KEY`; the same value lives in raspi BW under
+# `scribe.press_token` so both halves agree.
+SCRIBE_PRESS = {
+    "repo": "eetu/scribe",
+    "branch": "main",
+    "port": 3005,
+    "internal_port": 3015,
+    # Concurrent jobs. M4 Pro can handle 2–4 simultaneous ffmpeg remuxes
+    # easily; SSD write bandwidth is the limit, not CPU.
+    "max_jobs": 2,
+    # Bearer required by default — press is on the LAN and would otherwise
+    # let any LAN client trigger downloads.
+    "require_api_key": True,
+}
+
 PIPER = {
     "version": "1.4.2",  # piper-tts on PyPI
     "port": 8192,
