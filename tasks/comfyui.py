@@ -1,10 +1,17 @@
-"""ComfyUI: opinionated img2img stack built around Flux.1 Kontext [dev] GGUF.
+"""ComfyUI: opinionated diffusion stack on MPS.
 
 This is a single-purpose deployment, not a generic ComfyUI install. The model
 set, custom-node pin, and target subdirs are hardcoded here — the calling app
-(../chat) talks to a known fixed model. Bumping COMFYUI["version"] re-fetches
-the source tarball, wipes /Applications/ComfyUI/, and rebuilds the .venv from
-requirements.txt; weights live outside the install dir and survive.
+(../chat) talks to known fixed models. Three workflows ship under
+files/comfyui-workflows/:
+  - Flux.1 Kontext [dev] GGUF — edit-by-reference img2img
+  - Flux.1 Fill [dev] GGUF    — masked inpaint / outpaint
+  - Z-Image Turbo GGUF        — pure txt2img (replaces Ollama's flaky MLX
+                                imagegen runner; see the model note below)
+Only one diffusion model is resident per request — the workflow selects which.
+Bumping COMFYUI["version"] re-fetches the source tarball, wipes
+/Applications/ComfyUI/, and rebuilds the .venv from requirements.txt; weights
+live outside the install dir and survive.
 
 Why GGUF (not FP8):
   PyTorch's MPS backend has no kernel for Float8_e4m3fn, so loading Flux
@@ -111,6 +118,32 @@ MODELS = (
         "flux1-fill-dev-Q6_K.gguf",
         "https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-gguf/resolve/main"
         "/flux1-fill-dev-Q6_K.gguf",
+    ),
+    # Z-Image Turbo (Tongyi-MAI, 6B) — pure txt2img, distilled to ~8 steps.
+    # Replaces Ollama's experimental MLX imagegen runner, which panics on
+    # this exact model (ollama/ollama#16079, "index out of range" in the
+    # qwen3 text encoder) — ComfyUI runs it cleanly. All-GGUF to match the
+    # Flux stack: Q8_0 diffusion (~6.5 GB, unsloth dynamic quant) + a Qwen3-4B
+    # text encoder GGUF (~3 GB). Peak resident ~11 GB vs the bf16 path's ~20 GB
+    # (z_image_turbo_bf16 ~12 GB + qwen_3_4b ~8 GB), which is too tight on
+    # 24 GB. Loaded via the same city96 UnetLoaderGGUF / CLIPLoaderGGUF nodes.
+    # The VAE is the same Flux ae.safetensors already pulled below — reused,
+    # not re-downloaded. See files/comfyui-workflows/z-image-turbo-txt2img.json.
+    (
+        "diffusion_models",
+        "z-image-turbo-Q8_0.gguf",
+        "https://huggingface.co/unsloth/Z-Image-Turbo-GGUF/resolve/main/z-image-turbo-Q8_0.gguf",
+    ),
+    # Qwen3-4B text encoder for Z-Image. ComfyUI core auto-detects this as
+    # TEModel.QWEN3_4B and — because the CLIPLoader type is not flux/flux2 —
+    # routes it to the z_image text encoder + ZImageTokenizer (comfy/sd.py).
+    # No mmproj sidecar needed (txt2img path is text-only). UD-Q5_K_XL is the
+    # unsloth-dynamic quant felipedpm packaged specifically for ComfyUI z-image.
+    (
+        "text_encoders",
+        "Qwen3-4B-UD-Q5_K_XL.gguf",
+        "https://huggingface.co/felipedpm/z-image-turbo-GGUF-confyui/resolve/main"
+        "/models/text_encoders/Qwen3-4B-UD-Q5_K_XL.gguf",
     ),
     (
         "text_encoders",
