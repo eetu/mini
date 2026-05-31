@@ -195,10 +195,10 @@ BESZEL = {
     "version": "v0.18.7",
     # Where the agent dials the hub. The raspi hub binds to 127.0.0.1 only,
     # so this must be a network-reachable address. Pick one:
-    #   - Through the raspi Traefik route (TLS): "https://metrics.<your-domain>"
+    #   - Through the raspi Traefik route (TLS): "https://beszel.<your-domain>"
     #   - Direct to raspi LAN IP (only if you expose the hub on the LAN, which
     #     the raspi project does NOT do by default).
-    "hub_url": "https://metrics.example.com",
+    "hub_url": "https://beszel.example.com",
 }
 
 # Apple Screen Sharing (VNC on 5900). True bootstraps + enables the
