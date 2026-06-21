@@ -12,7 +12,7 @@ SHELL = "/opt/homebrew/bin/fish"  # /bin/zsh, /bin/bash, /opt/homebrew/bin/fish
 SSH = {
     # Public keys appended to ~ssh_user/.ssh/authorized_keys at deploy time.
     # Public keys are not secret — list them directly. Store the matching
-    # private keys wherever you keep them (Bitwarden SSH-key items, password
+    # private keys wherever you keep them (1Password SSH-key items, password
     # manager, etc.). The deploy never reads private keys.
     "authorized_keys": [
         # "ssh-ed25519 AAAAC3... your-comment",
@@ -35,7 +35,7 @@ OLLAMA = {
     "port": 11434,
     "internal_port": 11435,
     # When True, Caddy enforces `Authorization: Bearer $OLLAMA_API_KEY` on every request.
-    # Token comes from the `ollama` Bitwarden item, field `api_key`.
+    # Token comes from the `ollama` 1Password item, field `api_key`.
     # When False, Caddy is a transparent reverse proxy — no auth, LAN trust only.
     "require_api_key": False,
     # Models pulled at deploy time. See https://ollama.com/library/gemma4/tags
@@ -102,7 +102,7 @@ WHISPER = {
     # https://huggingface.co/ggerganov/whisper.cpp/tree/main.
     "model_filename": "ggml-large-v3-turbo-q8_0.bin",
     # When True, Caddy enforces `Authorization: Bearer $WHISPER_API_KEY`.
-    # Token comes from the `whisper` Bitwarden item, field `api_key`.
+    # Token comes from the `whisper` 1Password item, field `api_key`.
     "require_api_key": False,
 }
 
@@ -118,8 +118,8 @@ WHISPER = {
 # The build step hashes against GH's commit SHA, so a redeploy is a no-op
 # when nothing has changed upstream. Flip to a tag once scribe stabilizes.
 # Pi-side `scribe` backend sends jobs over Caddy with `Authorization:
-# Bearer $SCRIBE_PRESS_API_KEY`; the same value lives in raspi BW under
-# `scribe.press_token` so both halves agree.
+# Bearer $SCRIBE_PRESS_API_KEY`; the same value lives in the raspi `scribe`
+# 1Password item under `press_token` so both halves agree.
 SCRIBE_PRESS = {
     "repo": "eetu/scribe",
     "branch": "main",
@@ -177,13 +177,13 @@ COMFYUI = {
     "port": 8188,
     "internal_port": 8189,
     # When True, Caddy enforces `Authorization: Bearer $COMFYUI_API_KEY` on every request.
-    # Token comes from the `comfyui` Bitwarden item, field `api_key`.
+    # Token comes from the `comfyui` 1Password item, field `api_key`.
     # When False, Caddy is a transparent reverse proxy — no auth, LAN trust only.
     "require_api_key": False,
 }
 
 # Beszel agent — outbound monitoring agent that dials the raspi hub.
-# When enabled, requires the BW item `mini/beszel-agent` with hidden fields
+# When enabled, requires the 1Password item `mini/beszel-agent` with hidden fields
 # `token` (universal token from the hub) and `key` (hub ed25519 public key).
 # Both copy from the running raspi: hub UI > Add System, or
 # /etc/secrets/beszel-agent.env on the raspi.

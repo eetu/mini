@@ -10,11 +10,11 @@ point. Same reason no GPU-bound service should ever live in a Mac container.
 
 Secret layout:
   /etc/secrets/beszel-agent.env — TOKEN + KEY, written by tasks/secrets.py
-                                  from the BW item `mini/beszel-agent`.
+                                  from the 1Password item `mini/beszel-agent`.
 
 Bootstrapping TOKEN + KEY: copy them out of the running raspi hub UI
 (Add System dialog) or from `/etc/secrets/beszel-agent.env` on the raspi,
-then paste into the BW item before deploying.
+then paste into the 1Password item before deploying.
 
 Toggle: BESZEL["enabled"]. Flipping False removes the LaunchDaemon, binary,
 wrapper, and stamp on the next deploy.
@@ -132,7 +132,7 @@ exec {BIN_PATH}
         mode="644",
     )
 
-    # env file hashed at run time so a rotated TOKEN/KEY in BW triggers a
+    # env file hashed at run time so a rotated TOKEN/KEY in 1Password triggers a
     # kickstart on the next deploy without changing plist/wrapper.
     _static_hash = hashlib.sha256((_wrapper + _plist).encode()).hexdigest()
 

@@ -18,9 +18,9 @@ stabilizes this can flip to a tag.
   - LaunchDaemon (bind 127.0.0.1:{internal_port})
   - Caddy site at LAN-facing port with bearer auth
 
-Bearer secret lives in BW (`mini/scribe-press` item, `api_key` field) and
-gets written to /etc/secrets/scribe-press.env by tasks/secrets.py — the
-same value must be pasted into the raspi `scribe` BW item's `press_token`
+Bearer secret lives in 1Password (`mini/scribe-press` item, `api_key` field)
+and gets written to /etc/secrets/scribe-press.env by tasks/secrets.py — the
+same value must be pasted into the raspi `scribe` 1Password item's `press_token`
 field so scribe knows what to send.
 """
 

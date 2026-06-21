@@ -1,7 +1,8 @@
-"""Write secrets from Bitwarden to /etc/secrets/ on the Mini.
+"""Write secrets from 1Password to /etc/secrets/ on the Mini.
 
-Only runs when a service has its `require_*` flag enabled. Empty deploys
-(no secrets configured) leave /etc/secrets/ as an empty 700 dir.
+`vault` fetches from the `mini` 1Password vault at deploy time (see vault.py).
+Only runs when a service has its `require_*` flag enabled. Empty deploys (no
+secrets configured) leave /etc/secrets/ as an empty 700 dir.
 """
 
 import io
@@ -9,7 +10,7 @@ import shlex
 
 from pyinfra.operations import files
 
-import vault as bw
+import vault
 from group_data.all import BESZEL, COMFYUI, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
 
 
@@ -38,7 +39,7 @@ files.directory(
 if OLLAMA.get("require_api_key"):
     _put_secret(
         "ollama.env",
-        f"OLLAMA_API_KEY={bw.ollama_api_key()}\n",
+        f"OLLAMA_API_KEY={vault.ollama_api_key()}\n",
         "/etc/secrets/ollama.env",
     )
 else:
@@ -53,7 +54,7 @@ else:
 if COMFYUI.get("require_api_key"):
     _put_secret(
         "comfyui.env",
-        f"COMFYUI_API_KEY={bw.comfyui_api_key()}\n",
+        f"COMFYUI_API_KEY={vault.comfyui_api_key()}\n",
         "/etc/secrets/comfyui.env",
     )
 else:
@@ -68,7 +69,7 @@ else:
 if WHISPER.get("require_api_key"):
     _put_secret(
         "whisper.env",
-        f"WHISPER_API_KEY={bw.whisper_api_key()}\n",
+        f"WHISPER_API_KEY={vault.whisper_api_key()}\n",
         "/etc/secrets/whisper.env",
     )
 else:
@@ -83,7 +84,7 @@ else:
 if PIPER.get("require_api_key"):
     _put_secret(
         "piper.env",
-        f"PIPER_API_KEY={bw.piper_api_key()}\n",
+        f"PIPER_API_KEY={vault.piper_api_key()}\n",
         "/etc/secrets/piper.env",
     )
 else:
@@ -98,7 +99,7 @@ else:
 if SCRIBE_PRESS.get("require_api_key"):
     _put_secret(
         "scribe-press.env",
-        f"SCRIBE_PRESS_API_KEY={bw.scribe_press_api_key()}\n",
+        f"SCRIBE_PRESS_API_KEY={vault.scribe_press_api_key()}\n",
         "/etc/secrets/scribe-press.env",
     )
 else:
@@ -108,10 +109,10 @@ else:
         present=False,
     )
 
-# --- Beszel agent TOKEN + KEY (synced from BW on every deploy) ---
+# --- Beszel agent TOKEN + KEY (synced from 1Password on every deploy) ---
 
 if BESZEL.get("enabled"):
-    _bz = bw.beszel_agent_creds()
+    _bz = vault.beszel_agent_creds()
     # Shell-quote both values: KEY is `ssh-ed25519 AAAA...` with a space, which
     # the wrapper's POSIX `.` loader would otherwise parse as
     # `KEY=ssh-ed25519` plus a command `AAAA...`. systemd's EnvironmentFile

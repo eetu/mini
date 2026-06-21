@@ -62,13 +62,15 @@ masked inpaint (ComfyUI / Flux Kontext + Flux Fill), speech-to-text
 2. Place your SSH public key on the Mini manually (`ssh-copy-id`) so pyinfra can connect.
 3. Copy `inventory.example.py` → `inventory.py` and `group_data/all.example.py` → `group_data/all.py`.
    Fill in LAN IP, SSH user, and add the same public key to `SSH["authorized_keys"]`.
-4. (Optional) For bearer-token auth: create a Bitwarden folder `mini`, an item
+4. (Optional) For bearer-token auth: create a 1Password vault `mini`, an item
    per service (`ollama`, `comfyui`, `whisper`, `piper`) with a hidden field
    `api_key` (`openssl rand -hex 32`), then flip the matching
    `require_api_key` flag to True.
-5. (Optional) For Beszel monitoring: BW item `mini/beszel-agent` with hidden
+5. (Optional) For Beszel monitoring: 1Password item `mini/beszel-agent` with hidden
    fields `token` + `key` (copied from the raspi hub), then `BESZEL["enabled"] = True`.
-6. `set -x BW_SESSION (bw unlock --raw)` when any of the above needs BW.
+6. Enable the 1Password CLI desktop-app integration (1Password → Settings →
+   Developer → "Integrate with 1Password CLI"); the first `op` call during a
+   deploy that needs secrets triggers Touch ID — no session env var.
 7. `uv run pyinfra inventory.py deploy.py`
 
 Sitting at the Mini for the first deploy? Skip SSH and use `inventory.local.py`
@@ -83,8 +85,7 @@ uv run pyinfra inventory.py deploy.py
 # One task in isolation
 uv run pyinfra inventory.py tasks/caddy.py
 
-# Rotate an API key (after editing the BW item)
-set -x BW_SESSION (bw unlock --raw)
+# Rotate an API key (after editing the 1Password item)
 uv run pyinfra inventory.py tasks/secrets.py tasks/caddy.py
 
 # Bump ComfyUI / Whisper / Piper to a new release
@@ -117,7 +118,7 @@ curl http://192.168.x.y:11434/api/generate \
 
 # OpenAI-compatible
 set -x OPENAI_BASE_URL http://192.168.x.y:11434/v1
-set -x OPENAI_API_KEY (bw get item ollama | jq -r '.fields[] | select(.name=="api_key").value')
+set -x OPENAI_API_KEY (op read "op://mini/ollama/api_key")
 ```
 
 ### Embeddings
