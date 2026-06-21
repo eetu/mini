@@ -19,11 +19,14 @@ Item / field map (one vault, items named as below):
   piper          login (unused)  field: api_key (hidden)
   scribe-press   login (unused)  field: api_key (hidden) — must match the raspi
                                  `scribe` item's `press_token` field
+  mlflow         login (unused)  field: api_key (hidden)
+  finkeyb        login (unused)  fields: gh_token (hidden, PAT contents:write),
+                                 api_token (hidden), api_url (deployed base URL)
   beszel-agent   login (unused)  fields: token (hidden), key (hidden)
 
-The `ollama`, `comfyui`, `whisper`, `piper`, and `scribe-press` items are only
-required when their respective `require_api_key` flag is True. Generate each
-token once with `openssl rand -hex 32` and paste it as the `api_key` hidden
+The `ollama`, `comfyui`, `whisper`, `piper`, `scribe-press`, and `mlflow` items
+are only required when their respective `require_api_key` flag is True. Generate
+each token once with `openssl rand -hex 32` and paste it as the `api_key` hidden
 field on the item before deploying with the flag enabled.
 
 The `beszel-agent` item is required whenever tasks/beszel.py is in deploy.py.
@@ -155,6 +158,33 @@ def scribe_press_api_key() -> str:
     Same value must be pasted into the raspi `scribe` item under
     `press_token` so the Pi-side backend can authenticate."""
     return _api_key("scribe-press")
+
+
+def mlflow_api_key() -> str:
+    """Bearer that gates the Caddy-fronted MLflow server. Only called when
+    MLFLOW['require_api_key'] is True."""
+    return _api_key("mlflow")
+
+
+def finkeyb_creds() -> dict:
+    """GH PAT + deployed-API creds for the scheduled retrain box (tasks/finkeyb.py).
+
+    From item `finkeyb`: hidden fields `gh_token` (fine-grained PAT, contents:write) and
+    `api_token` (the FINKEYB_API_TOKEN shared secret), plus field `api_url` (deployed testbed base
+    URL, e.g. https://finkeyb.invinite.tech). Raises if any are missing."""
+    creds = {
+        "gh_token": _b.read_field("finkeyb", "gh_token"),
+        "api_token": _b.read_field("finkeyb", "api_token"),
+        "api_url": _b.read_field("finkeyb", "api_url"),
+    }
+    missing = [n for n, v in creds.items() if not v]
+    if missing:
+        raise RuntimeError(
+            f"Secret item '{_VAULT}/finkeyb' missing field(s): "
+            f"{', '.join(missing)}.\n"
+            "Add gh_token (PAT, contents:write) + api_token (hidden) + api_url, then re-run."
+        )
+    return creds
 
 
 def beszel_agent_creds() -> dict:

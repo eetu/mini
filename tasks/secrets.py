@@ -11,7 +11,16 @@ import shlex
 from pyinfra.operations import files
 
 import vault
-from group_data.all import BESZEL, COMFYUI, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
+from group_data.all import (
+    BESZEL,
+    COMFYUI,
+    FINKEYB,
+    MLFLOW,
+    OLLAMA,
+    PIPER,
+    SCRIBE_PRESS,
+    WHISPER,
+)
 
 
 def _put_secret(name, content, dest, mode="600", group="wheel"):
@@ -106,6 +115,41 @@ else:
     files.file(
         name="Remove /etc/secrets/scribe-press.env (auth disabled)",
         path="/etc/secrets/scribe-press.env",
+        present=False,
+    )
+
+# --- MLflow API key (only when auth is enabled) ---
+
+if MLFLOW.get("require_api_key"):
+    _put_secret(
+        "mlflow.env",
+        f"MLFLOW_API_KEY={vault.mlflow_api_key()}\n",
+        "/etc/secrets/mlflow.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/mlflow.env (auth disabled)",
+        path="/etc/secrets/mlflow.env",
+        present=False,
+    )
+
+# --- finkeyb retrain box: GH PAT + deployed-API creds (only when enabled) ---
+
+if FINKEYB.get("enabled"):
+    _fk = vault.finkeyb_creds()
+    # gh_token + api_token can contain shell-significant chars; the wrapper sources this file via
+    # POSIX `.`, so quote the values. api_url is a plain URL.
+    _put_secret(
+        "finkeyb.env",
+        f"GH_TOKEN={shlex.quote(_fk['gh_token'])}\n"
+        f"FINKEYB_API_TOKEN={shlex.quote(_fk['api_token'])}\n"
+        f"FINKEYB_API_URL={_fk['api_url']}\n",
+        "/etc/secrets/finkeyb.env",
+    )
+else:
+    files.file(
+        name="Remove /etc/secrets/finkeyb.env (finkeyb disabled)",
+        path="/etc/secrets/finkeyb.env",
         present=False,
     )
 

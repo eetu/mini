@@ -13,7 +13,7 @@ import io
 
 from pyinfra.operations import files, server
 
-from group_data.all import COMFYUI, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
+from group_data.all import COMFYUI, MLFLOW, OLLAMA, PIPER, SCRIBE_PRESS, WHISPER
 from tasks.util import kickstart_if_changed
 
 LABEL = "com.eetu.caddy"
@@ -28,6 +28,7 @@ SERVICES = (
     ("whisper", WHISPER, "WHISPER_API_KEY"),
     ("piper", PIPER, "PIPER_API_KEY"),
     ("scribe-press", SCRIBE_PRESS, "SCRIBE_PRESS_API_KEY"),
+    ("mlflow", MLFLOW, "MLFLOW_API_KEY"),
 )
 PLIST_PATH = f"/Library/LaunchDaemons/{LABEL}.plist"
 WRAPPER_PATH = "/usr/local/bin/caddy-run.sh"

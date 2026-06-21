@@ -201,6 +201,28 @@ BESZEL = {
     "hub_url": "https://beszel.example.com",
 }
 
+# MLflow tracking + model registry for finkeyb (tasks/mlflow.py). require_api_key=True gates
+# the Caddy-fronted port on `Authorization: Bearer $MLFLOW_API_KEY` (1Password item `mini/mlflow`,
+# field `api_key`). Pin `version` to whatever the finkeyb backend resolves (uv.lock).
+MLFLOW = {
+    "version": "3.14.0",
+    "port": 5000,
+    "internal_port": 5001,
+    "require_api_key": True,
+}
+
+# finkeyb scheduled retrain box (tasks/finkeyb.py). enabled=True clones FINKEYB["repo"], trains
+# on MPS nightly at retrain_hour, and pushes a promoted model. Requires 1Password item `mini/finkeyb`
+# with hidden fields `gh_token` (fine-grained PAT, contents:write) + `api_token`, and field
+# `api_url` (the deployed testbed base URL). enabled=False tears the daemon down.
+FINKEYB = {
+    "enabled": False,
+    "repo": "youruser/finkeyb",
+    "branch": "main",
+    "retrain_hour": 4,
+    "min_new_swipes": 20,
+}
+
 # Apple Screen Sharing (VNC on 5900). True bootstraps + enables the
 # com.apple.screensharing LaunchDaemon. False (or omitted) tears it down and
 # disables it across reboots. pf's LAN+WG perimeter already gates 5900 — no
