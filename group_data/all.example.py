@@ -206,7 +206,8 @@ BESZEL = {
 # field `api_key`). Pin `version` to whatever the finkeyb backend resolves (uv.lock).
 MLFLOW = {
     "version": "3.14.0",
-    "port": 5000,
+    # 5000 is reserved by macOS ControlCenter (AirPlay Receiver) — use 5050 LAN-facing.
+    "port": 5050,
     "internal_port": 5001,
     "require_api_key": True,
 }
