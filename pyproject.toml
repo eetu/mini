@@ -4,12 +4,12 @@ version = "0.1.0"
 description = "Agentless IaC for a Mac mini M4 Pro running ollama as a LAN OpenAI-compatible LLM endpoint."
 requires-python = ">=3.13"
 dependencies = [
-    "pyinfra>=3.7",
+    "pyinfra>=3.9.2",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.12",
+    "ruff>=0.15.20",
 ]
 
 [tool.ruff]
