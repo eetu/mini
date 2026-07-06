@@ -199,6 +199,13 @@ BESZEL = {
     #   - Direct to raspi LAN IP (only if you expose the hub on the LAN, which
     #     the raspi project does NOT do by default).
     "hub_url": "https://beszel.example.com",
+    # Optional temp-sensor filter (agent `SENSORS` env, needs agent >= v0.12.11).
+    # Whitelist by default; blacklist with a leading "-". Empty string disables
+    # temp monitoring entirely. On Apple Silicon "PMU tcal" is a calibration
+    # reference (a fixed ~52 C that ignores load, not a real hotspot) — blacklist
+    # it so it stops skewing the dashboard / PRIMARY_SENSOR pick. Omit the key
+    # to report every sensor.
+    "sensors": "-PMU tcal",
 }
 
 # MLflow tracking + model registry for finkeyb (tasks/mlflow.py). require_api_key=True gates
