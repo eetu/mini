@@ -88,6 +88,15 @@ exec {BIN_PATH}
         mode="755",
     )
 
+    # Optional non-secret SENSORS filter (agent >= v0.12.11). Emitted only when
+    # BESZEL["sensors"] is set, so omitting the key preserves prior behaviour.
+    # It lives in the plist, so _static_hash covers it → editing the value
+    # kickstarts the agent on the next deploy without any extra plumbing.
+    _sensors = BESZEL.get("sensors")
+    _sensors_env = (
+        f"    <key>SENSORS</key>\n    <string>{_sensors}</string>\n" if _sensors is not None else ""
+    )
+
     # HUB_URL + DATA_DIR are non-secret config — fine in the plist.
     # DISABLE_SSH=true mirrors raspi: agent dials hub, no SSH listener.
     _plist = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -110,7 +119,7 @@ exec {BIN_PATH}
     <string>true</string>
     <key>HOME</key>
     <string>/var/root</string>
-  </dict>
+{_sensors_env}  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
