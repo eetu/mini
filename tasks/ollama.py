@@ -148,73 +148,89 @@ server.shell(
 )
 
 # --- Wait for ollama to be ready, then pull models ---
-# `ollama pull` is idempotent — it skips already-present blobs — but we still
-# want to skip the network round-trip when nothing's missing. Stamp file lists
-# the models that succeeded last run; only models not in the stamp are pulled.
-
-_models = OLLAMA["models"]
-_models_joined = " ".join(_models)
-_prune = bool(OLLAMA.get("prune_unlisted"))
-# Hash covers list + prune flag so toggling the flag re-runs the reconciler
-# even when the list itself is unchanged.
-_models_hash = hashlib.sha256(f"{_models_joined}|prune={_prune}".encode()).hexdigest()
-
-# Strict-mode prune block — only emitted when `prune_unlisted` is True.
-# Walks `ollama list` and deletes anything not in the desired set. Models in
-# the list but not yet on disk are pulled by the loop above, so by the time
-# we reach this we know the desired set is fully present.
-#
 # Tag normalization: `ollama pull <name>` without a tag stores the model as
-# `<name>:latest`, but the user's config may list the bare name. We expand
-# both the desired set and the observed set to canonical `<name>:<tag>` form
-# before comparing, so `nomic-embed-text` in config matches the
-# `nomic-embed-text:latest` row in `ollama list`. Without this, the prune
-# walk would re-delete every bare-name model right after pulling it.
-_prune_block = (
-    f"""
-        DESIRED=""
-        for m in {_models_joined}; do
-          case "$m" in *:*) DESIRED="$DESIRED $m" ;; *) DESIRED="$DESIRED $m:latest" ;; esac
-        done
-        DESIRED=" $DESIRED "
-        for m in $({BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}'); do
-          case "$DESIRED" in
-            *" $m "*) ;;
-            *) {BIN_PATH} rm "$m" ;;
-          esac
-        done
-    """
-    if _prune
-    else ""
-)
+# `<name>:latest`, but the config may list the bare name. Expand to canonical
+# `<name>:<tag>` form before comparing against `ollama list`, so
+# `nomic-embed-text` in config matches the `nomic-embed-text:latest` row.
+# Without this, the prune walk would re-delete every bare-name model right
+# after pulling it.
+_models = OLLAMA["models"]
+_prune = bool(OLLAMA.get("prune_unlisted"))
+
+
+def _tagged(model):
+    return model if ":" in model else f"{model}:latest"
+
 
 server.shell(
-    name="Reconcile ollama models" + (" (prune unlisted)" if _prune else ""),
+    name="Wait for ollama to accept requests",
     commands=[
         f"""
-        set -e
-        export OLLAMA_HOST={INTERNAL_HOST}
-        STAMP=/var/db/.mini-ollama-models-stamp
-        if [ "$(cat "$STAMP" 2>/dev/null)" = "{_models_hash}" ]; then
-          exit 0
-        fi
-        # Wait up to 30s for the daemon to come up after kickstart.
+        # Up to 30s for the daemon to come up after a kickstart.
         for i in $(seq 1 30); do
-          if curl -fsS http://{INTERNAL_HOST}/api/tags >/dev/null 2>&1; then break; fi
+          if curl -fsS http://{INTERNAL_HOST}/api/tags >/dev/null 2>&1; then exit 0; fi
           sleep 1
         done
-        for model in {_models_joined}; do
-          # Normalize the lookup name: bare `nomic-embed-text` matches
-          # `nomic-embed-text:latest` as ollama stores it.
-          case "$model" in *:*) target="$model" ;; *) target="$model:latest" ;; esac
-          if ! {BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}' | grep -qx "$target"; then
-            {BIN_PATH} pull "$model"
-          fi
-        done
-        {_prune_block}
-        echo '{_models_hash}' > "$STAMP"
+        echo "ollama not answering on {INTERNAL_HOST}" >&2
+        exit 1
         """,
     ],
+)
+
+# Pulls are deliberately one operation per model rather than a single
+# reconcile loop. `ollama pull` writes its progress bar to a tty pyinfra
+# doesn't have, so nothing surfaces until the command exits — a fresh
+# 18 GB model is ~5 min of total silence, and a changed list of two big
+# models reads as a hung deploy. Per-model operations name what's
+# downloading, and an interrupted deploy keeps every model that already
+# finished instead of restarting the whole set.
+#
+# `ollama list` is the idempotence check (a local HTTP call, ~10 ms): present
+# means skip. No stamp file — an all-or-nothing stamp written after the last
+# pull is exactly what made an interrupt lose the bookkeeping for pulls that
+# had in fact succeeded.
+for _model in _models:
+    server.shell(
+        name=f"Pull ollama model {_model}",
+        commands=[
+            f"""
+            set -e
+            export OLLAMA_HOST={INTERNAL_HOST}
+            if {BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}' \\
+                 | grep -qx '{_tagged(_model)}'; then
+              exit 0
+            fi
+            {BIN_PATH} pull '{_model}'
+            """,
+        ],
+    )
+
+# Strict mode — only emitted when `prune_unlisted` is True. Walks
+# `ollama list` and deletes anything not in the desired set. Runs after the
+# pull operations above, so the desired set is fully present by now.
+if _prune:
+    _desired = " " + " ".join(_tagged(m) for m in _models) + " "
+    server.shell(
+        name="Prune ollama models not in config",
+        commands=[
+            f"""
+            set -e
+            export OLLAMA_HOST={INTERNAL_HOST}
+            DESIRED="{_desired}"
+            for m in $({BIN_PATH} list 2>/dev/null | awk 'NR>1 {{print $1}}'); do
+              case "$DESIRED" in
+                *" $m "*) ;;
+                *) {BIN_PATH} rm "$m" ;;
+              esac
+            done
+            """,
+        ],
+    )
+
+# Drop the stamp left by the older single-operation reconciler.
+server.shell(
+    name="Remove stale ollama models stamp",
+    commands=["rm -f /var/db/.mini-ollama-models-stamp"],
 )
 
 # --- Boot-time model warmup ---
