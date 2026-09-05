@@ -91,7 +91,7 @@ CADDY = {
 # Large-v3-turbo q5_0 (~574 MB; ~50x realtime on M4 Pro). Other models from
 # https://huggingface.co/ggerganov/whisper.cpp/tree/main.
 WHISPER = {
-    "version": "v1.8.4",
+    "version": "v1.9.3",
     "port": 8190,
     "internal_port": 8191,
     # Large-v3-turbo q8_0 (~874 MB): turbo's decoder-distilled architecture
@@ -134,7 +134,7 @@ SCRIBE_PRESS = {
 }
 
 PIPER = {
-    "version": "1.4.2",  # piper-tts on PyPI
+    "version": "1.8.0",  # piper-tts on PyPI
     "port": 8192,
     "internal_port": 8193,
     # Voice slugs (`<lang>-<voice>-<quality>`) from
@@ -172,7 +172,7 @@ COMFYUI = {
     # and extracts to /Applications/ComfyUI. Bumping this wipes the existing
     # install directory (incl. .venv) and reinstalls. Models live outside
     # the install dir and survive version bumps.
-    "version": "v0.20.1",
+    "version": "v0.34.0",
     # Caddy listens on `port` (LAN-facing); ComfyUI listens on `internal_port` (127.0.0.1 only).
     "port": 8188,
     "internal_port": 8189,
@@ -192,7 +192,10 @@ BESZEL = {
     # Pin the agent binary to the same major as the raspi hub. Mismatched
     # major versions can break the WS protocol. Releases:
     # https://github.com/henrygd/beszel/releases
-    "version": "v0.18.7",
+    # Agents from v0.19.0 verify the hub's HTTPS certificate. A hub behind a
+    # self-signed cert needs CA_CERT_FILE pointing at its CA; a publicly
+    # trusted cert (Let's Encrypt via the hub's reverse proxy) needs nothing.
+    "version": "v0.19.0",
     # Where the agent dials the hub. The raspi hub binds to 127.0.0.1 only,
     # so this must be a network-reachable address. Pick one:
     #   - Through the raspi Traefik route (TLS): "https://beszel.<your-domain>"
