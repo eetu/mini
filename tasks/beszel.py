@@ -141,9 +141,12 @@ exec {BIN_PATH}
         mode="644",
     )
 
+    # VERSION is part of the hash because the install block above replaces the
+    # binary in place and the plist text is byte-identical across bumps — without
+    # it a version bump would leave the old agent process running.
     # env file hashed at run time so a rotated TOKEN/KEY in 1Password triggers a
     # kickstart on the next deploy without changing plist/wrapper.
-    _static_hash = hashlib.sha256((_wrapper + _plist).encode()).hexdigest()
+    _static_hash = hashlib.sha256((_wrapper + _plist + VERSION).encode()).hexdigest()
 
     server.shell(
         name="Bootstrap beszel-agent + kickstart on change",
