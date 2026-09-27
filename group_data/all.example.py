@@ -195,7 +195,7 @@ BESZEL = {
     # Agents from v0.19.0 verify the hub's HTTPS certificate. A hub behind a
     # self-signed cert needs CA_CERT_FILE pointing at its CA; a publicly
     # trusted cert (Let's Encrypt via the hub's reverse proxy) needs nothing.
-    "version": "v0.19.0",
+    "version": "v0.20.0",
     # Where the agent dials the hub. The raspi hub binds to 127.0.0.1 only,
     # so this must be a network-reachable address. Pick one:
     #   - Through the raspi Traefik route (TLS): "https://beszel.<your-domain>"
